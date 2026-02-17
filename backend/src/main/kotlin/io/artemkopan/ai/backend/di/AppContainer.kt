@@ -11,6 +11,7 @@ import io.artemkopan.ai.core.data.repository.GeminiLlmRepository
 import io.artemkopan.ai.core.domain.repository.LlmRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logger
@@ -27,6 +28,10 @@ class AppContainer(config: AppConfig) {
     private val httpClient = HttpClient(CIO) {
         install(ContentNegotiation) {
             json(json)
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 60_000
+            connectTimeoutMillis = 10_000
         }
         install(Logging) {
             logger = object : Logger {

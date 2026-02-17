@@ -3,12 +3,14 @@ package io.artemkopan.ai.core.data.client
 import io.artemkopan.ai.core.domain.error.DomainError
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.plugins.ServerResponseException
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 class GeminiNetworkClient(
@@ -64,11 +66,15 @@ class GeminiNetworkClient(
                 },
             )
         }.recoverCatching { throwable ->
-            throw when {
-                throwable is DomainError -> throwable
-                throwable.message?.contains("429") == true -> DomainError.RateLimited("Provider rate limit exceeded.", throwable)
-                throwable.message?.contains("401") == true || throwable.message?.contains("403") == true ->
-                    DomainError.ProviderUnavailable("Provider authentication failed.", throwable)
+            throw when (throwable) {
+                is DomainError -> throwable
+                is ClientRequestException -> when (throwable.response.status) {
+                    HttpStatusCode.TooManyRequests -> DomainError.RateLimited("Provider rate limit exceeded.", throwable)
+                    HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden ->
+                        DomainError.ProviderUnavailable("Provider authentication failed.", throwable)
+                    else -> DomainError.ProviderUnavailable("Provider call failed: ${throwable.response.status}.", throwable)
+                }
+                is ServerResponseException -> DomainError.ProviderUnavailable("Provider server error: ${throwable.response.status}.", throwable)
                 else -> DomainError.ProviderUnavailable("Provider call failed.", throwable)
             }
         }
@@ -119,10 +125,7 @@ private data class GeminiCandidatePart(
 
 @Serializable
 private data class GeminiUsageMetadata(
-    @SerialName("promptTokenCount")
     val promptTokenCount: Int? = null,
-    @SerialName("candidatesTokenCount")
     val candidatesTokenCount: Int? = null,
-    @SerialName("totalTokenCount")
     val totalTokenCount: Int? = null,
 )

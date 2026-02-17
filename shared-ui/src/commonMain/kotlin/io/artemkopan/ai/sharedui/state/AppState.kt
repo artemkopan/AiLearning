@@ -6,6 +6,7 @@ import io.artemkopan.ai.sharedui.gateway.PromptGateway
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,10 +40,8 @@ class AppState(
     }
 
     fun submit() {
-        println("[AiAssistant][UI] Send clicked")
         val currentPrompt = mutableState.value.prompt.trim()
         if (currentPrompt.isBlank()) {
-            println("[AiAssistant][UI] Validation failed: blank prompt")
             mutableState.value = mutableState.value.copy(
                 errorPopup = ErrorPopupState(
                     title = "Validation Error",
@@ -53,20 +52,17 @@ class AppState(
         }
 
         mutableState.value = mutableState.value.copy(isLoading = true, errorPopup = null)
-        println("[AiAssistant][UI] Sending /api/v1/generate request")
 
         scope.launch {
             val result = gateway.generate(GenerateRequestDto(prompt = currentPrompt))
             mutableState.value = result.fold(
                 onSuccess = { response ->
-                    println("[AiAssistant][UI] Request success")
                     mutableState.value.copy(
                         isLoading = false,
                         response = response,
                     )
                 },
                 onFailure = { throwable ->
-                    println("[AiAssistant][UI] Request failed: ${throwable.message ?: "unknown"}")
                     mutableState.value.copy(
                         isLoading = false,
                         errorPopup = ErrorPopupState(
@@ -77,5 +73,9 @@ class AppState(
                 }
             )
         }
+    }
+
+    fun close() {
+        scope.cancel()
     }
 }

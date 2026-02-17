@@ -1,13 +1,21 @@
 package io.artemkopan.ai.sharedui.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -43,13 +51,39 @@ fun AiAssistantScreen(appState: AppState) {
                     onClick = appState::submit,
                     enabled = !uiState.isLoading,
                 ) {
-                    Text(if (uiState.isLoading) "Generating..." else "Send")
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Generating...")
+                    } else {
+                        Text("Send")
+                    }
+                }
+
+                if (uiState.isLoading) {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Generating response...", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                 }
 
                 uiState.response?.let { response ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text(response.text)

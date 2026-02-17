@@ -55,7 +55,7 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         allowMethod(HttpMethod.Post)
         allowMethod(HttpMethod.Get)
         allowHeader(HttpHeaders.ContentType)
-        anyHost()
+        allowHost(config.corsOrigin.removePrefix("http://").removePrefix("https://"), schemes = listOf("http", "https"))
     }
     install(StatusPages) {
         exception<Throwable> { call, throwable ->

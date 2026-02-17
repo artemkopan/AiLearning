@@ -6,13 +6,27 @@ import androidx.compose.ui.window.CanvasBasedWindow
 import io.artemkopan.ai.sharedui.state.AppState
 import io.artemkopan.ai.sharedui.ui.AiAssistantScreen
 import io.artemkopan.ai.webapp.ui.HttpPromptGateway
+import kotlinx.browser.window
+
+private fun resolveBackendUrl(): String {
+    // In production, use same origin. For local dev, override via query param: ?backend=http://localhost:8080
+    val params = window.location.search
+    val backendParam = params.removePrefix("?")
+        .split("&")
+        .map { it.split("=", limit = 2) }
+        .find { it.firstOrNull() == "backend" }
+        ?.getOrNull(1)
+
+    return backendParam ?: "http://localhost:8080"
+}
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    println("[AiAssistant][UI] Frontend initialized. Backend URL: http://localhost:8080")
+    val backendUrl = resolveBackendUrl()
+    console.log("[AiAssistant][UI] Frontend initialized. Backend URL: $backendUrl")
 
     CanvasBasedWindow(title = "AiAssistant") {
-        val gateway = remember { HttpPromptGateway(backendBaseUrl = "http://localhost:8080") }
+        val gateway = remember { HttpPromptGateway(backendBaseUrl = backendUrl) }
         val appState = remember { AppState(gateway) }
 
         AiAssistantScreen(appState)

@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 docker compose --env-file .env up --build backend
 
 # Run web app (development)
-./gradlew :webApp:jsBrowserDevelopmentRun
+./gradlew :web-host:jsBrowserDevelopmentRun
 
 # Build distribution
 ./gradlew :backend:installDist
@@ -43,9 +43,10 @@ This is a Clean Architecture Kotlin Multiplatform project with clear layer separ
 core/domain     → Entities, domain errors, repository interfaces (pure Kotlin, no dependencies)
 core/application → Use cases (business logic), depends only on domain
 core/data       → Repository implementations, network clients (Ktor HTTP client)
-shared-contract → DTOs shared between backend and webApp (kotlinx.serialization)
+shared-contract → DTOs shared between backend and frontend (kotlinx.serialization)
+shared-ui       → Compose Multiplatform UI components and state management
 backend         → Ktor JVM server, HTTP routes, DI wiring
-webApp          → Compose Multiplatform Web frontend
+web-host        → Web app entry point (JS), wires shared-ui with HTTP gateway
 ```
 
 **Dependency flow**: `backend` → `core/application` → `core/domain` ← `core/data`
