@@ -1,0 +1,26 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Kotlin/JS / Compose web generated output
+**/kotlin-js-store/
+**/.kotlin/
+
+# IDE
+.idea/
+*.iml
+out/
+
+# OS
+.DS_Store
+
+# Local env
+.env
+.env.local
+
+# Logs
+*.log
+
+# Generated wrappers/cache
+**/.gradle/
