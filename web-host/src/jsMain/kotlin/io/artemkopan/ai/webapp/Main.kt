@@ -6,6 +6,8 @@ import androidx.compose.ui.window.CanvasBasedWindow
 import io.artemkopan.ai.sharedui.state.AppState
 import io.artemkopan.ai.sharedui.ui.AiAssistantScreen
 import io.artemkopan.ai.webapp.ui.HttpPromptGateway
+import io.github.aakira.napier.DebugAntilog
+import io.github.aakira.napier.Napier
 import kotlinx.browser.window
 
 private fun resolveBackendUrl(): String {
@@ -22,8 +24,10 @@ private fun resolveBackendUrl(): String {
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    Napier.base(DebugAntilog())
+
     val backendUrl = resolveBackendUrl()
-    console.log("[AiAssistant][UI] Frontend initialized. Backend URL: $backendUrl")
+    Napier.i(tag = "Main") { "Frontend initialized. Backend URL: $backendUrl" }
 
     CanvasBasedWindow(title = "AiAssistant") {
         val gateway = remember { HttpPromptGateway(backendBaseUrl = backendUrl) }

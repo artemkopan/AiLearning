@@ -3,6 +3,7 @@ package io.artemkopan.ai.sharedui.state
 import io.artemkopan.ai.sharedcontract.GenerateRequestDto
 import io.artemkopan.ai.sharedcontract.GenerateResponseDto
 import io.artemkopan.ai.sharedui.gateway.PromptGateway
+import io.github.aakira.napier.Napier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,17 +32,23 @@ class AppState(
     private val mutableState = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = mutableState.asStateFlow()
 
+    init {
+        Napier.d(tag = TAG) { "AppState initialized" }
+    }
+
     fun onPromptChanged(value: String) {
         mutableState.value = mutableState.value.copy(prompt = value)
     }
 
     fun dismissError() {
+        Napier.d(tag = TAG) { "Error dismissed" }
         mutableState.value = mutableState.value.copy(errorPopup = null)
     }
 
     fun submit() {
         val currentPrompt = mutableState.value.prompt.trim()
         if (currentPrompt.isBlank()) {
+            Napier.w(tag = TAG) { "Submit blocked: prompt is blank" }
             mutableState.value = mutableState.value.copy(
                 errorPopup = ErrorPopupState(
                     title = "Validation Error",
@@ -51,18 +58,23 @@ class AppState(
             return
         }
 
+        Napier.i(tag = TAG) { "Submitting prompt: length=${currentPrompt.length}" }
         mutableState.value = mutableState.value.copy(isLoading = true, errorPopup = null)
 
         scope.launch {
             val result = gateway.generate(GenerateRequestDto(prompt = currentPrompt))
             mutableState.value = result.fold(
                 onSuccess = { response ->
+                    Napier.i(tag = TAG) {
+                        "Generation successful: requestId=${response.requestId}, latencyMs=${response.latencyMs}"
+                    }
                     mutableState.value.copy(
                         isLoading = false,
                         response = response,
                     )
                 },
                 onFailure = { throwable ->
+                    Napier.e(tag = TAG, throwable = throwable) { "Generation failed" }
                     mutableState.value.copy(
                         isLoading = false,
                         errorPopup = ErrorPopupState(
@@ -76,6 +88,11 @@ class AppState(
     }
 
     fun close() {
+        Napier.d(tag = TAG) { "AppState closing" }
         scope.cancel()
+    }
+
+    private companion object {
+        const val TAG = "AppState"
     }
 }

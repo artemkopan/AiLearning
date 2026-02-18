@@ -31,6 +31,7 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.client.logging)
     implementation(libs.logback.classic)
+    implementation(libs.napier)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)

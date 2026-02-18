@@ -4,10 +4,12 @@ import io.artemkopan.ai.sharedcontract.ErrorResponseDto
 import io.artemkopan.ai.sharedcontract.GenerateRequestDto
 import io.artemkopan.ai.sharedcontract.GenerateResponseDto
 import io.artemkopan.ai.sharedui.gateway.PromptGateway
+import io.github.aakira.napier.Napier
 import kotlinx.browser.window
 import kotlinx.coroutines.await
 import kotlinx.serialization.json.Json
 import org.w3c.fetch.RequestInit
+import kotlin.js.Date
 
 class HttpPromptGateway(
     private val backendBaseUrl: String,
@@ -18,6 +20,9 @@ class HttpPromptGateway(
     }
 
     override suspend fun generate(request: GenerateRequestDto): Result<GenerateResponseDto> {
+        Napier.d(tag = TAG) { "Starting HTTP request: promptLength=${request.prompt.length}" }
+        val startTime = Date.now()
+
         return runCatching {
             val init = RequestInit(
                 method = "POST",
@@ -28,14 +33,29 @@ class HttpPromptGateway(
             val bodyText = response.text().await()
 
             if (!response.ok) {
-                val msg = runCatching { json.decodeFromString(ErrorResponseDto.serializer(), bodyText).message }
-                    .getOrDefault("Request failed. Please try again.")
+                val errorResponse = runCatching { json.decodeFromString(ErrorResponseDto.serializer(), bodyText) }
+                    .getOrNull()
+                val msg = errorResponse?.message ?: "Request failed. Please try again."
+                Napier.w(tag = TAG) {
+                    "HTTP error: status=${response.status}, code=${errorResponse?.code}, requestId=${errorResponse?.requestId}"
+                }
                 throw RuntimeException(msg)
             }
 
-            json.decodeFromString(GenerateResponseDto.serializer(), bodyText)
+            val result = json.decodeFromString(GenerateResponseDto.serializer(), bodyText)
+            val latencyMs = (Date.now() - startTime).toLong()
+            Napier.i(tag = TAG) {
+                "HTTP success: requestId=${result.requestId}, serverLatencyMs=${result.latencyMs}, clientLatencyMs=$latencyMs"
+            }
+            result
         }.recoverCatching { throwable ->
+            val latencyMs = (Date.now() - startTime).toLong()
+            Napier.e(tag = TAG, throwable = throwable) { "HTTP request failed after ${latencyMs}ms" }
             throw RuntimeException(throwable.message ?: "Request failed. Please try again.")
         }
+    }
+
+    private companion object {
+        const val TAG = "HttpPromptGateway"
     }
 }
