@@ -4,7 +4,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.CanvasBasedWindow
 import io.artemkopan.ai.sharedui.di.sharedUiModules
 import io.artemkopan.ai.sharedui.state.AppViewModel
-import io.artemkopan.ai.sharedui.ui.AiAssistantScreen
+import io.artemkopan.ai.sharedui.ui.screen.AiAssistantScreen
 import io.artemkopan.ai.webapp.ui.HttpPromptGateway
 import io.github.aakira.napier.DebugAntilog
 import io.github.aakira.napier.Napier
