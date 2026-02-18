@@ -40,7 +40,11 @@ class GeminiNetworkClient(
                         contents = listOf(
                             GeminiContent(parts = listOf(GeminiPart(text = request.prompt)))
                         ),
-                        generationConfig = GeminiGenerationConfig(temperature = request.temperature),
+                        generationConfig = GeminiGenerationConfig(
+                            temperature = request.temperature,
+                            maxOutputTokens = request.maxOutputTokens,
+                            stopSequences = request.stopSequences,
+                        ),
                     )
                 )
             }.body()
@@ -124,6 +128,8 @@ private data class GeminiPart(
 @Serializable
 private data class GeminiGenerationConfig(
     val temperature: Double,
+    val maxOutputTokens: Int? = null,
+    val stopSequences: List<String>? = null,
 )
 
 @Serializable

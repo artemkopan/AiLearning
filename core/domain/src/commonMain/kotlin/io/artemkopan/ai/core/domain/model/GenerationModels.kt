@@ -6,10 +6,16 @@ data class ModelId(val value: String)
 
 data class Temperature(val value: Double)
 
+data class MaxOutputTokens(val value: Int)
+
+data class StopSequences(val values: List<String>)
+
 data class LlmGenerationInput(
     val prompt: Prompt,
     val modelId: ModelId,
     val temperature: Temperature,
+    val maxOutputTokens: MaxOutputTokens? = null,
+    val stopSequences: StopSequences? = null,
 )
 
 data class TokenUsage(

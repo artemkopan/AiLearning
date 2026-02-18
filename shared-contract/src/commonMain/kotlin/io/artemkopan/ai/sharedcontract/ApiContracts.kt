@@ -7,6 +7,8 @@ data class GenerateRequestDto(
     val prompt: String,
     val model: String? = null,
     val temperature: Double? = null,
+    val maxOutputTokens: Int? = null,
+    val stopSequences: List<String>? = null,
 )
 
 @Serializable

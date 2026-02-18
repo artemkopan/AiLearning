@@ -22,7 +22,9 @@ class GenerateTextUseCase(
             return Result.failure(error)
         }
 
-        val options = resolveGenerationOptionsUseCase.execute(command.model, command.temperature)
+        val options = resolveGenerationOptionsUseCase.execute(
+            command.model, command.temperature, command.maxOutputTokens, command.stopSequences,
+        )
             .getOrElse { error ->
                 Napier.w(tag = TAG) { "Options resolution failed: ${error.message}" }
                 return Result.failure(error)
@@ -35,6 +37,8 @@ class GenerateTextUseCase(
                 prompt = prompt,
                 modelId = options.modelId,
                 temperature = options.temperature,
+                maxOutputTokens = options.maxOutputTokens,
+                stopSequences = options.stopSequences,
             )
         ).map { generation ->
             Napier.i(tag = TAG) {

@@ -21,6 +21,8 @@ class GeminiLlmRepository(
                 prompt = input.prompt.value,
                 model = input.modelId.value,
                 temperature = input.temperature.value,
+                maxOutputTokens = input.maxOutputTokens?.value,
+                stopSequences = input.stopSequences?.values,
             )
         ).map { response ->
             Napier.d(tag = TAG) { "Repository mapping response: provider=${response.provider}" }

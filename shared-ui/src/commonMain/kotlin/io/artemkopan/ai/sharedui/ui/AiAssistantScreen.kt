@@ -2,14 +2,18 @@ package io.artemkopan.ai.sharedui.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -23,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedui.state.AppViewModel
 import io.artemkopan.ai.sharedui.state.UiAction
@@ -53,13 +58,43 @@ private fun AiAssistantContent(
             ) {
                 Text("AiAssistant Prompt", style = MaterialTheme.typography.headlineSmall)
 
-                OutlinedTextField(
-                    value = state.prompt,
-                    onValueChange = { onAction(UiAction.PromptChanged(it)) },
-                    label = { Text("Prompt") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 8,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedTextField(
+                        value = state.prompt,
+                        onValueChange = { onAction(UiAction.PromptChanged(it)) },
+                        label = { Text("Prompt") },
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        minLines = 8,
+                    )
+
+                    Column(
+                        modifier = Modifier.width(200.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("Configuration", style = MaterialTheme.typography.labelLarge)
+
+                        OutlinedTextField(
+                            value = state.maxOutputTokens,
+                            onValueChange = { onAction(UiAction.MaxOutputTokensChanged(it)) },
+                            label = { Text("Max Output Tokens") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
+
+                        OutlinedTextField(
+                            value = state.stopSequences,
+                            onValueChange = { onAction(UiAction.StopSequencesChanged(it)) },
+                            label = { Text("Stop Sequences") },
+                            placeholder = { Text("comma, separated") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                        )
+                    }
+                }
 
                 Button(
                     onClick = { onAction(UiAction.Submit) },
@@ -105,6 +140,12 @@ private fun AiAssistantContent(
                                 "Provider: ${response.provider}, Model: ${response.model}",
                                 style = MaterialTheme.typography.bodySmall,
                             )
+                            response.usage?.let { usage ->
+                                Text(
+                                    "Tokens — input: ${usage.inputTokens}, output: ${usage.outputTokens}, total: ${usage.totalTokens}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
                     }
                 }

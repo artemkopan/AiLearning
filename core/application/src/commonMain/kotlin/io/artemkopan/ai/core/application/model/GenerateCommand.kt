@@ -4,6 +4,8 @@ data class GenerateCommand(
     val prompt: String,
     val model: String?,
     val temperature: Double?,
+    val maxOutputTokens: Int? = null,
+    val stopSequences: List<String>? = null,
 )
 
 data class GenerateOutput(

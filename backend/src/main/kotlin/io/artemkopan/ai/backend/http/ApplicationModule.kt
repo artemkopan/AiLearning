@@ -109,6 +109,8 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
                     prompt = payload.prompt,
                     model = payload.model,
                     temperature = payload.temperature,
+                    maxOutputTokens = payload.maxOutputTokens,
+                    stopSequences = payload.stopSequences,
                 )
             )
 

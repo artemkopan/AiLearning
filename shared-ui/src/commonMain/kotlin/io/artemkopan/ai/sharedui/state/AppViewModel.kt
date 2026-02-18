@@ -12,10 +12,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+data class UsageResult(
+    val inputTokens: Int,
+    val outputTokens: Int,
+    val totalTokens: Int,
+)
+
 data class GenerationResult(
     val text: String,
     val provider: String,
     val model: String,
+    val usage: UsageResult? = null,
 )
 
 data class ErrorPopupState(
@@ -25,6 +32,8 @@ data class ErrorPopupState(
 
 data class UiState(
     val prompt: String = "",
+    val maxOutputTokens: String = "",
+    val stopSequences: String = "",
     val isLoading: Boolean = false,
     val response: GenerationResult? = null,
     val errorPopup: ErrorPopupState? = null,
@@ -32,6 +41,8 @@ data class UiState(
 
 sealed interface UiAction {
     data class PromptChanged(val value: String) : UiAction
+    data class MaxOutputTokensChanged(val value: String) : UiAction
+    data class StopSequencesChanged(val value: String) : UiAction
     data object Submit : UiAction
     data object DismissError : UiAction
 }
@@ -51,6 +62,8 @@ class AppViewModel(
     fun onAction(action: UiAction) {
         when (action) {
             is UiAction.PromptChanged -> handlePromptChanged(action.value)
+            is UiAction.MaxOutputTokensChanged -> handleMaxOutputTokensChanged(action.value)
+            is UiAction.StopSequencesChanged -> handleStopSequencesChanged(action.value)
             is UiAction.Submit -> handleSubmit()
             is UiAction.DismissError -> handleDismissError()
         }
@@ -58,6 +71,14 @@ class AppViewModel(
 
     private fun handlePromptChanged(value: String) {
         _state.update { it.copy(prompt = value) }
+    }
+
+    private fun handleMaxOutputTokensChanged(value: String) {
+        _state.update { it.copy(maxOutputTokens = value.filter { ch -> ch.isDigit() }) }
+    }
+
+    private fun handleStopSequencesChanged(value: String) {
+        _state.update { it.copy(stopSequences = value) }
     }
 
     private fun handleDismissError() {
@@ -91,8 +112,21 @@ class AppViewModel(
         Napier.i(tag = TAG) { "Submitting prompt: length=${currentPrompt.length}" }
         _state.update { it.copy(isLoading = true, errorPopup = null) }
 
+        val maxTokens = _state.value.maxOutputTokens.toIntOrNull()
+        val stopSeqs = _state.value.stopSequences
+            .split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .takeIf { it.isNotEmpty() }
+
         generationJob = viewModelScope.launch {
-            gateway.generate(GenerateRequestDto(prompt = currentPrompt))
+            gateway.generate(
+                GenerateRequestDto(
+                    prompt = currentPrompt,
+                    maxOutputTokens = maxTokens,
+                    stopSequences = stopSeqs,
+                )
+            )
                 .onSuccess { dto ->
                     Napier.i(tag = TAG) {
                         "Generation successful: requestId=${dto.requestId}, latencyMs=${dto.latencyMs}"
@@ -104,6 +138,13 @@ class AppViewModel(
                                 text = dto.text,
                                 provider = dto.provider,
                                 model = dto.model,
+                                usage = dto.usage?.let { usage ->
+                                    UsageResult(
+                                        inputTokens = usage.inputTokens,
+                                        outputTokens = usage.outputTokens,
+                                        totalTokens = usage.totalTokens,
+                                    )
+                                },
                             ),
                         )
                     }
