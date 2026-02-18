@@ -1,15 +1,16 @@
 package io.artemkopan.ai.webapp
 
-import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.CanvasBasedWindow
-import androidx.lifecycle.viewmodel.compose.viewModel
+import io.artemkopan.ai.sharedui.di.sharedUiModules
 import io.artemkopan.ai.sharedui.state.AppViewModel
 import io.artemkopan.ai.sharedui.ui.AiAssistantScreen
 import io.artemkopan.ai.webapp.ui.HttpPromptGateway
 import io.github.aakira.napier.DebugAntilog
 import io.github.aakira.napier.Napier
 import kotlinx.browser.window
+import org.koin.compose.KoinApplication
+import org.koin.compose.viewmodel.koinViewModel
 
 private fun resolveBackendUrl(): String {
     // In production, use same origin. For local dev, override via query param: ?backend=http://localhost:8080
@@ -30,10 +31,14 @@ fun main() {
     val backendUrl = resolveBackendUrl()
     Napier.i(tag = "Main") { "Frontend initialized. Backend URL: $backendUrl" }
 
-    CanvasBasedWindow(title = "AiAssistant") {
-        val gateway = remember { HttpPromptGateway(backendBaseUrl = backendUrl) }
-        val viewModel = viewModel { AppViewModel(gateway) }
+    val gateway = HttpPromptGateway(backendBaseUrl = backendUrl)
 
-        AiAssistantScreen(viewModel)
+    CanvasBasedWindow(title = "AiAssistant") {
+        KoinApplication(application = {
+            modules(sharedUiModules(gateway))
+        }) {
+            val viewModel = koinViewModel<AppViewModel>()
+            AiAssistantScreen(viewModel)
+        }
     }
 }

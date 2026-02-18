@@ -21,6 +21,9 @@ kotlin {
             implementation(compose.material3)
             implementation(libs.napier)
             implementation(libs.lifecycle.viewmodel.compose)
+            api(libs.koin.core)
+            api(libs.koin.compose)
+            api(libs.koin.compose.viewmodel)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

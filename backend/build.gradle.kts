@@ -32,6 +32,8 @@ dependencies {
     implementation(libs.ktor.client.logging)
     implementation(libs.logback.classic)
     implementation(libs.napier)
+    implementation(libs.koin.ktor)
+    implementation(libs.koin.logger.slf4j)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.ktor.server.test.host)
