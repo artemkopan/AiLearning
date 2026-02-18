@@ -1,6 +1,6 @@
 package io.artemkopan.ai.core.data.client
 
-import io.artemkopan.ai.core.domain.error.DomainError
+import io.artemkopan.ai.core.data.error.DataError
 import io.github.aakira.napier.Napier
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -23,7 +23,7 @@ class GeminiNetworkClient(
     override suspend fun generate(request: NetworkGenerateRequest): Result<NetworkGenerateResponse> {
         if (apiKey.isBlank()) {
             Napier.e(tag = TAG) { "API key is missing" }
-            return Result.failure(DomainError.ProviderUnavailable("Missing GEMINI_API_KEY configuration."))
+            return Result.failure(DataError.AuthenticationError("Missing GEMINI_API_KEY configuration."))
         }
 
         Napier.d(tag = TAG) { "Starting generation request: model=${request.model}, promptLength=${request.prompt.length}" }
@@ -56,7 +56,7 @@ class GeminiNetworkClient(
 
             if (text.isBlank()) {
                 Napier.w(tag = TAG) { "Provider returned empty response" }
-                throw DomainError.ProviderUnavailable("Provider returned an empty response.")
+                throw DataError.EmptyResponseError("Provider returned an empty response.")
             }
 
             val latencyMs = currentTimeMillis() - startTime
@@ -81,15 +81,15 @@ class GeminiNetworkClient(
         }.recoverCatching { throwable ->
             val latencyMs = currentTimeMillis() - startTime
             val mappedError = when (throwable) {
-                is DomainError -> throwable
+                is DataError -> throwable
                 is ClientRequestException -> when (throwable.response.status) {
-                    HttpStatusCode.TooManyRequests -> DomainError.RateLimited("Provider rate limit exceeded.", throwable)
+                    HttpStatusCode.TooManyRequests -> DataError.RateLimitError("Provider rate limit exceeded.", throwable)
                     HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden ->
-                        DomainError.ProviderUnavailable("Provider authentication failed.", throwable)
-                    else -> DomainError.ProviderUnavailable("Provider call failed: ${throwable.response.status}.", throwable)
+                        DataError.AuthenticationError("Provider authentication failed.", throwable)
+                    else -> DataError.NetworkError("Provider call failed: ${throwable.response.status}.", throwable)
                 }
-                is ServerResponseException -> DomainError.ProviderUnavailable("Provider server error: ${throwable.response.status}.", throwable)
-                else -> DomainError.ProviderUnavailable("Provider call failed.", throwable)
+                is ServerResponseException -> DataError.NetworkError("Provider server error: ${throwable.response.status}.", throwable)
+                else -> DataError.NetworkError("Provider call failed.", throwable)
             }
             Napier.e(tag = TAG, throwable = throwable) {
                 "Generation failed: model=${request.model}, latencyMs=$latencyMs, error=${mappedError.message}"

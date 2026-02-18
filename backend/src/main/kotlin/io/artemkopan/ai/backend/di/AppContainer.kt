@@ -1,6 +1,7 @@
 package io.artemkopan.ai.backend.di
 
 import io.artemkopan.ai.backend.config.AppConfig
+import io.artemkopan.ai.core.application.mapper.DomainErrorMapper
 import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
 import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
 import io.artemkopan.ai.core.application.usecase.ResolveGenerationOptionsUseCase
@@ -50,11 +51,13 @@ class AppContainer(config: AppConfig) {
 
     private val validatePromptUseCase = ValidatePromptUseCase()
     private val resolveGenerationOptionsUseCase = ResolveGenerationOptionsUseCase(defaultModel = config.defaultModel)
+    private val domainErrorMapper = DomainErrorMapper()
 
     val generateTextUseCase = GenerateTextUseCase(
         repository = repository,
         validatePromptUseCase = validatePromptUseCase,
         resolveGenerationOptionsUseCase = resolveGenerationOptionsUseCase,
+        errorMapper = domainErrorMapper,
     )
 
     val mapFailureToUserMessageUseCase = MapFailureToUserMessageUseCase()

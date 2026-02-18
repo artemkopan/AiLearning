@@ -20,6 +20,7 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(libs.napier)
+            implementation(libs.lifecycle.viewmodel.compose)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

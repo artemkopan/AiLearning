@@ -1,7 +1,6 @@
 package io.artemkopan.ai.sharedui.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,12 +24,27 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.artemkopan.ai.sharedui.state.AppState
+import io.artemkopan.ai.sharedui.state.AppViewModel
+import io.artemkopan.ai.sharedui.state.UiAction
+import io.artemkopan.ai.sharedui.state.UiState
 
 @Composable
-fun AiAssistantScreen(appState: AppState) {
-    val uiState by appState.state.collectAsState()
+fun AiAssistantScreen(
+    viewModel: AppViewModel,
+) {
+    val uiState by viewModel.state.collectAsState()
 
+    AiAssistantContent(
+        state = uiState,
+        onAction = viewModel::onAction,
+    )
+}
+
+@Composable
+private fun AiAssistantContent(
+    state: UiState,
+    onAction: (UiAction) -> Unit,
+) {
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column(
@@ -40,18 +54,18 @@ fun AiAssistantScreen(appState: AppState) {
                 Text("AiAssistant Prompt", style = MaterialTheme.typography.headlineSmall)
 
                 OutlinedTextField(
-                    value = uiState.prompt,
-                    onValueChange = appState::onPromptChanged,
+                    value = state.prompt,
+                    onValueChange = { onAction(UiAction.PromptChanged(it)) },
                     label = { Text("Prompt") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 8,
                 )
 
                 Button(
-                    onClick = appState::submit,
-                    enabled = !uiState.isLoading,
+                    onClick = { onAction(UiAction.Submit) },
+                    enabled = !state.isLoading,
                 ) {
-                    if (uiState.isLoading) {
+                    if (state.isLoading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
                             strokeWidth = 2.dp,
@@ -64,7 +78,7 @@ fun AiAssistantScreen(appState: AppState) {
                     }
                 }
 
-                if (uiState.isLoading) {
+                if (state.isLoading) {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -77,7 +91,7 @@ fun AiAssistantScreen(appState: AppState) {
                     }
                 }
 
-                uiState.response?.let { response ->
+                state.response?.let { response ->
                     Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         Column(
                             modifier = Modifier
@@ -97,11 +111,11 @@ fun AiAssistantScreen(appState: AppState) {
             }
         }
 
-        uiState.errorPopup?.let { error ->
+        state.errorPopup?.let { error ->
             AlertDialog(
-                onDismissRequest = appState::dismissError,
+                onDismissRequest = { onAction(UiAction.DismissError) },
                 confirmButton = {
-                    Button(onClick = appState::dismissError) {
+                    Button(onClick = { onAction(UiAction.DismissError) }) {
                         Text("Close")
                     }
                 },

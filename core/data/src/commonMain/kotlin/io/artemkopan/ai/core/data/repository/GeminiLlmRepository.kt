@@ -2,6 +2,8 @@ package io.artemkopan.ai.core.data.repository
 
 import io.artemkopan.ai.core.data.client.LlmNetworkClient
 import io.artemkopan.ai.core.data.client.NetworkGenerateRequest
+import io.artemkopan.ai.core.data.error.DataError
+import io.artemkopan.ai.core.domain.error.DomainError
 import io.artemkopan.ai.core.domain.model.LlmGeneration
 import io.artemkopan.ai.core.domain.model.LlmGenerationInput
 import io.artemkopan.ai.core.domain.model.TokenUsage
@@ -34,9 +36,19 @@ class GeminiLlmRepository(
                     )
                 },
             )
-        }.onFailure { error ->
-            Napier.e(tag = TAG, throwable = error) { "Repository generate failed" }
+        }.recoverCatching { throwable ->
+            Napier.e(tag = TAG, throwable = throwable) { "Repository generate failed" }
+            throw mapToDomainError(throwable)
         }
+    }
+
+    private fun mapToDomainError(throwable: Throwable): DomainError = when (throwable) {
+        is DataError.RateLimitError -> DomainError.RateLimited(throwable.message ?: "Rate limited", throwable)
+        is DataError.AuthenticationError -> DomainError.ProviderUnavailable(throwable.message ?: "Auth failed", throwable)
+        is DataError.EmptyResponseError -> DomainError.ProviderUnavailable(throwable.message ?: "Empty response", throwable)
+        is DataError.NetworkError -> DomainError.ProviderUnavailable(throwable.message ?: "Network error", throwable)
+        is DomainError -> throwable
+        else -> DomainError.Unexpected(throwable.message ?: "Unexpected error", throwable)
     }
 
     private companion object {

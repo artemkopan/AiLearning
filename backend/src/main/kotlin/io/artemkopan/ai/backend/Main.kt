@@ -32,6 +32,14 @@ fun main() {
         maskSecret(config.geminiApiKey),
     )
 
+    try {
+        config.validate()
+        logger.info("Configuration validated successfully")
+    } catch (e: IllegalArgumentException) {
+        logger.error("Configuration validation failed: {}", e.message)
+        throw e
+    }
+
     embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
         module(config)
     }.start(wait = true)

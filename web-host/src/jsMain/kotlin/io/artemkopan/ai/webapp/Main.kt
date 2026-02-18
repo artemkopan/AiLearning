@@ -3,7 +3,8 @@ package io.artemkopan.ai.webapp
 import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.CanvasBasedWindow
-import io.artemkopan.ai.sharedui.state.AppState
+import androidx.lifecycle.viewmodel.compose.viewModel
+import io.artemkopan.ai.sharedui.state.AppViewModel
 import io.artemkopan.ai.sharedui.ui.AiAssistantScreen
 import io.artemkopan.ai.webapp.ui.HttpPromptGateway
 import io.github.aakira.napier.DebugAntilog
@@ -31,8 +32,8 @@ fun main() {
 
     CanvasBasedWindow(title = "AiAssistant") {
         val gateway = remember { HttpPromptGateway(backendBaseUrl = backendUrl) }
-        val appState = remember { AppState(gateway) }
+        val viewModel = viewModel { AppViewModel(gateway) }
 
-        AiAssistantScreen(appState)
+        AiAssistantScreen(viewModel)
     }
 }

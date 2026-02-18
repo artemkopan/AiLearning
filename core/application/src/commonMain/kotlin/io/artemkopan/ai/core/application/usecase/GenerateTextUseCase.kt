@@ -1,10 +1,9 @@
 package io.artemkopan.ai.core.application.usecase
 
-import io.artemkopan.ai.core.application.error.AppError
+import io.artemkopan.ai.core.application.mapper.DomainErrorMapper
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.model.GenerateOutput
 import io.artemkopan.ai.core.application.model.UsageOutput
-import io.artemkopan.ai.core.domain.error.DomainError
 import io.artemkopan.ai.core.domain.model.LlmGenerationInput
 import io.artemkopan.ai.core.domain.repository.LlmRepository
 import io.github.aakira.napier.Napier
@@ -13,6 +12,7 @@ class GenerateTextUseCase(
     private val repository: LlmRepository,
     private val validatePromptUseCase: ValidatePromptUseCase,
     private val resolveGenerationOptionsUseCase: ResolveGenerationOptionsUseCase,
+    private val errorMapper: DomainErrorMapper,
 ) {
     suspend fun execute(command: GenerateCommand): Result<GenerateOutput> {
         Napier.d(tag = TAG) { "Executing generate text: promptLength=${command.prompt.length}" }
@@ -53,15 +53,7 @@ class GenerateTextUseCase(
                 },
             )
         }.recoverCatching { throwable ->
-            val mappedError = when (throwable) {
-                is DomainError.RateLimited -> AppError.RateLimited(throwable.message ?: "Rate limited", throwable)
-                is DomainError.ProviderUnavailable -> AppError.UpstreamUnavailable(
-                    throwable.message ?: "Provider unavailable",
-                    throwable,
-                )
-                is AppError -> throwable
-                else -> AppError.Unexpected("Unexpected generation failure.", throwable)
-            }
+            val mappedError = errorMapper.mapToAppError(throwable)
             Napier.e(tag = TAG, throwable = throwable) { "Generation failed: ${mappedError.message}" }
             throw mappedError
         }
