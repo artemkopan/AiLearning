@@ -2,6 +2,7 @@ package io.artemkopan.ai.sharedui.state
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.artemkopan.ai.sharedcontract.AgentMode
 import io.artemkopan.ai.sharedcontract.GenerateRequestDto
 import io.artemkopan.ai.sharedui.gateway.PromptGateway
 import io.github.aakira.napier.Napier
@@ -34,6 +35,7 @@ data class UiState(
     val prompt: String = "",
     val maxOutputTokens: String = "",
     val stopSequences: String = "",
+    val agentMode: AgentMode = AgentMode.DEFAULT,
     val isLoading: Boolean = false,
     val response: GenerationResult? = null,
     val errorPopup: ErrorPopupState? = null,
@@ -43,6 +45,7 @@ sealed interface UiAction {
     data class PromptChanged(val value: String) : UiAction
     data class MaxOutputTokensChanged(val value: String) : UiAction
     data class StopSequencesChanged(val value: String) : UiAction
+    data class AgentModeChanged(val value: AgentMode) : UiAction
     data object Submit : UiAction
     data object DismissError : UiAction
 }
@@ -64,6 +67,7 @@ class AppViewModel(
             is UiAction.PromptChanged -> handlePromptChanged(action.value)
             is UiAction.MaxOutputTokensChanged -> handleMaxOutputTokensChanged(action.value)
             is UiAction.StopSequencesChanged -> handleStopSequencesChanged(action.value)
+            is UiAction.AgentModeChanged -> handleAgentModeChanged(action.value)
             is UiAction.Submit -> handleSubmit()
             is UiAction.DismissError -> handleDismissError()
         }
@@ -79,6 +83,10 @@ class AppViewModel(
 
     private fun handleStopSequencesChanged(value: String) {
         _state.update { it.copy(stopSequences = value) }
+    }
+
+    private fun handleAgentModeChanged(value: AgentMode) {
+        _state.update { it.copy(agentMode = value) }
     }
 
     private fun handleDismissError() {
@@ -125,6 +133,7 @@ class AppViewModel(
                     prompt = currentPrompt,
                     maxOutputTokens = maxTokens,
                     stopSequences = stopSeqs,
+                    agentMode = _state.value.agentMode.takeIf { it != AgentMode.DEFAULT },
                 )
             )
                 .onSuccess { dto ->

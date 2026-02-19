@@ -4,6 +4,7 @@ import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.core.application.mapper.DomainErrorMapper
 import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
 import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
+import io.artemkopan.ai.core.application.usecase.ResolveAgentModeUseCase
 import io.artemkopan.ai.core.application.usecase.ResolveGenerationOptionsUseCase
 import io.artemkopan.ai.core.application.usecase.ValidatePromptUseCase
 import io.artemkopan.ai.core.data.client.GeminiNetworkClient
@@ -69,11 +70,13 @@ val applicationModule = module {
         val config = get<AppConfig>()
         ResolveGenerationOptionsUseCase(defaultModel = config.defaultModel)
     }
+    single { ResolveAgentModeUseCase() }
     single {
         GenerateTextUseCase(
             repository = get(),
             validatePromptUseCase = get(),
             resolveGenerationOptionsUseCase = get(),
+            resolveAgentModeUseCase = get(),
             errorMapper = get(),
         )
     }

@@ -9,6 +9,7 @@ data class GenerateRequestDto(
     val temperature: Double? = null,
     val maxOutputTokens: Int? = null,
     val stopSequences: List<String>? = null,
+    val agentMode: AgentMode? = null,
 )
 
 @Serializable

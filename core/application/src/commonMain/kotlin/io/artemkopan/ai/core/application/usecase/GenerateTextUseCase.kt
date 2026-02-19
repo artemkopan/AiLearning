@@ -12,6 +12,7 @@ class GenerateTextUseCase(
     private val repository: LlmRepository,
     private val validatePromptUseCase: ValidatePromptUseCase,
     private val resolveGenerationOptionsUseCase: ResolveGenerationOptionsUseCase,
+    private val resolveAgentModeUseCase: ResolveAgentModeUseCase,
     private val errorMapper: DomainErrorMapper,
 ) {
     suspend fun execute(command: GenerateCommand): Result<GenerateOutput> {
@@ -30,6 +31,11 @@ class GenerateTextUseCase(
                 return Result.failure(error)
             }
 
+        val systemInstruction = resolveAgentModeUseCase.execute(command.agentMode).getOrElse { error ->
+            Napier.w(tag = TAG) { "Agent mode resolution failed: ${error.message}" }
+            return Result.failure(error)
+        }
+
         Napier.d(tag = TAG) { "Calling repository: model=${options.modelId.value}, temp=${options.temperature.value}" }
 
         return repository.generate(
@@ -39,6 +45,7 @@ class GenerateTextUseCase(
                 temperature = options.temperature,
                 maxOutputTokens = options.maxOutputTokens,
                 stopSequences = options.stopSequences,
+                systemInstruction = systemInstruction,
             )
         ).map { generation ->
             Napier.i(tag = TAG) {

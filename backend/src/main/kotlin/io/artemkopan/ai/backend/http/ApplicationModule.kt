@@ -111,6 +111,7 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
                     temperature = payload.temperature,
                     maxOutputTokens = payload.maxOutputTokens,
                     stopSequences = payload.stopSequences,
+                    agentMode = payload.agentMode?.name?.lowercase(),
                 )
             )
 

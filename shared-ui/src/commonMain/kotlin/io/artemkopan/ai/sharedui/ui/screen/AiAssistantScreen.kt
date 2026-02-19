@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedui.state.AppViewModel
 import io.artemkopan.ai.sharedui.state.UiAction
 import io.artemkopan.ai.sharedui.state.UiState
+import io.artemkopan.ai.sharedui.ui.component.AgentModeSelector
 import io.artemkopan.ai.sharedui.ui.component.ConfigPanel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkTextField
 import io.artemkopan.ai.sharedui.ui.component.ErrorDialog
@@ -121,12 +122,23 @@ private fun PromptWithConfigRow(
             minLines = 8,
         )
 
-        ConfigPanel(
-            maxOutputTokens = state.maxOutputTokens,
-            onMaxOutputTokensChanged = { onAction(UiAction.MaxOutputTokensChanged(it)) },
-            stopSequences = state.stopSequences,
-            onStopSequencesChanged = { onAction(UiAction.StopSequencesChanged(it)) },
+        Column(
             modifier = Modifier.width(220.dp).fillMaxHeight(),
-        )
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AgentModeSelector(
+                selected = state.agentMode,
+                onModeSelected = { onAction(UiAction.AgentModeChanged(it)) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            ConfigPanel(
+                maxOutputTokens = state.maxOutputTokens,
+                onMaxOutputTokensChanged = { onAction(UiAction.MaxOutputTokensChanged(it)) },
+                stopSequences = state.stopSequences,
+                onStopSequencesChanged = { onAction(UiAction.StopSequencesChanged(it)) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }

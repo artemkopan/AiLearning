@@ -6,6 +6,7 @@ data class NetworkGenerateRequest(
     val temperature: Double,
     val maxOutputTokens: Int? = null,
     val stopSequences: List<String>? = null,
+    val systemInstruction: String? = null,
 )
 
 data class NetworkTokenUsage(

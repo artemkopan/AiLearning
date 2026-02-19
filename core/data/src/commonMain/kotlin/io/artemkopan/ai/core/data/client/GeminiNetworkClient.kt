@@ -45,6 +45,9 @@ class GeminiNetworkClient(
                             maxOutputTokens = request.maxOutputTokens,
                             stopSequences = request.stopSequences,
                         ),
+                        systemInstruction = request.systemInstruction?.let {
+                            GeminiContent(parts = listOf(GeminiPart(text = it)))
+                        },
                     )
                 )
             }.body()
@@ -113,6 +116,7 @@ internal expect fun currentTimeMillis(): Long
 private data class GeminiGenerateRequest(
     val contents: List<GeminiContent>,
     val generationConfig: GeminiGenerationConfig,
+    val systemInstruction: GeminiContent? = null,
 )
 
 @Serializable

@@ -6,6 +6,7 @@ data class GenerateCommand(
     val temperature: Double?,
     val maxOutputTokens: Int? = null,
     val stopSequences: List<String>? = null,
+    val agentMode: String? = null,
 )
 
 data class GenerateOutput(
