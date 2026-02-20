@@ -102,7 +102,16 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
             val requestId = call.ensureRequestId()
             val startedAt = System.currentTimeMillis()
             val payload = call.receive<GenerateRequestDto>()
-            logger.info("POST /api/v1/generate requestId={} promptLength={}", requestId, payload.prompt.length)
+            logger.info(
+                "POST /api/v1/generate requestId={} body: prompt='{}', model={}, temperature={}, maxOutputTokens={}, stopSequences={}, agentMode={}",
+                requestId,
+                payload.prompt,
+                payload.model,
+                payload.temperature,
+                payload.maxOutputTokens,
+                payload.stopSequences,
+                payload.agentMode,
+            )
 
             val result = generateTextUseCase.execute(
                 GenerateCommand(
@@ -118,7 +127,17 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
             result.fold(
                 onSuccess = { output ->
                     val latencyMs = System.currentTimeMillis() - startedAt
-                    logger.info("POST /api/v1/generate success requestId={} latencyMs={}", requestId, latencyMs)
+                    logger.info(
+                        "POST /api/v1/generate success requestId={} latencyMs={} response: provider={}, model={}, tokens(in={}, out={}, total={}), text='{}'",
+                        requestId,
+                        latencyMs,
+                        output.provider,
+                        output.model,
+                        output.usage?.inputTokens,
+                        output.usage?.outputTokens,
+                        output.usage?.totalTokens,
+                        output.text,
+                    )
                     call.respond(
                         HttpStatusCode.OK,
                         GenerateResponseDto(
