@@ -135,6 +135,8 @@ private fun PromptWithConfigRow(
             ConfigPanel(
                 maxOutputTokens = state.maxOutputTokens,
                 onMaxOutputTokensChanged = { onAction(UiAction.MaxOutputTokensChanged(it)) },
+                temperature = state.temperature,
+                onTemperatureChanged = { onAction(UiAction.TemperatureChanged(it)) },
                 stopSequences = state.stopSequences,
                 onStopSequencesChanged = { onAction(UiAction.StopSequencesChanged(it)) },
                 modifier = Modifier.fillMaxWidth(),

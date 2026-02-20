@@ -26,8 +26,8 @@ class ResolveGenerationOptionsUseCase(
         val normalizedModel = model?.trim().orEmpty().ifBlank { defaultModel }
         val normalizedTemperature = temperature ?: defaultTemperature
 
-        if (normalizedTemperature !in 0.0..1.0) {
-            return Result.failure(AppError.Validation("Temperature must be between 0.0 and 1.0."))
+        if (normalizedTemperature !in 0.0..2.0) {
+            return Result.failure(AppError.Validation("Temperature must be between 0.0 and 2.0."))
         }
 
         if (maxOutputTokens != null && maxOutputTokens <= 0) {

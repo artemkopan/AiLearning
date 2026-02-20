@@ -34,6 +34,7 @@ data class ErrorPopupState(
 data class UiState(
     val prompt: String = "",
     val maxOutputTokens: String = "",
+    val temperature: String = "",
     val stopSequences: String = "",
     val agentMode: AgentMode = AgentMode.DEFAULT,
     val isLoading: Boolean = false,
@@ -44,6 +45,7 @@ data class UiState(
 sealed interface UiAction {
     data class PromptChanged(val value: String) : UiAction
     data class MaxOutputTokensChanged(val value: String) : UiAction
+    data class TemperatureChanged(val value: String) : UiAction
     data class StopSequencesChanged(val value: String) : UiAction
     data class AgentModeChanged(val value: AgentMode) : UiAction
     data object Submit : UiAction
@@ -66,6 +68,7 @@ class AppViewModel(
         when (action) {
             is UiAction.PromptChanged -> handlePromptChanged(action.value)
             is UiAction.MaxOutputTokensChanged -> handleMaxOutputTokensChanged(action.value)
+            is UiAction.TemperatureChanged -> handleTemperatureChanged(action.value)
             is UiAction.StopSequencesChanged -> handleStopSequencesChanged(action.value)
             is UiAction.AgentModeChanged -> handleAgentModeChanged(action.value)
             is UiAction.Submit -> handleSubmit()
@@ -79,6 +82,19 @@ class AppViewModel(
 
     private fun handleMaxOutputTokensChanged(value: String) {
         _state.update { it.copy(maxOutputTokens = value.filter { ch -> ch.isDigit() }) }
+    }
+
+    private fun handleTemperatureChanged(value: String) {
+        val filtered = buildString {
+            var hasDot = false
+            for (ch in value) {
+                when {
+                    ch.isDigit() -> append(ch)
+                    ch == '.' && !hasDot -> { append(ch); hasDot = true }
+                }
+            }
+        }
+        _state.update { it.copy(temperature = filtered) }
     }
 
     private fun handleStopSequencesChanged(value: String) {
@@ -121,6 +137,7 @@ class AppViewModel(
         _state.update { it.copy(isLoading = true, errorPopup = null) }
 
         val maxTokens = _state.value.maxOutputTokens.toIntOrNull()
+        val temperature = _state.value.temperature.toDoubleOrNull()
         val stopSeqs = _state.value.stopSequences
             .split(",")
             .map { it.trim() }
@@ -132,6 +149,7 @@ class AppViewModel(
                 GenerateRequestDto(
                     prompt = currentPrompt,
                     maxOutputTokens = maxTokens,
+                    temperature = temperature,
                     stopSequences = stopSeqs,
                     agentMode = _state.value.agentMode.takeIf { it != AgentMode.DEFAULT },
                 )

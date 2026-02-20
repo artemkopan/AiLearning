@@ -10,6 +10,8 @@ import androidx.compose.ui.text.input.KeyboardType
 fun ConfigPanel(
     maxOutputTokens: String,
     onMaxOutputTokensChanged: (String) -> Unit,
+    temperature: String,
+    onTemperatureChanged: (String) -> Unit,
     stopSequences: String,
     onStopSequencesChanged: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -25,6 +27,16 @@ fun ConfigPanel(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+
+        CyberpunkTextField(
+            value = temperature,
+            onValueChange = onTemperatureChanged,
+            label = "TEMPERATURE",
+            placeholder = "0.0 – 2.0",
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
 
         CyberpunkTextField(

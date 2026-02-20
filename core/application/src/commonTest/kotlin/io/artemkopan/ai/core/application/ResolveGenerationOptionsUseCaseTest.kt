@@ -21,7 +21,7 @@ class ResolveGenerationOptionsUseCaseTest {
 
     @Test
     fun `fails when temperature out of range`() {
-        val result = useCase.execute(model = null, temperature = 1.5)
+        val result = useCase.execute(model = null, temperature = 2.5)
         assertTrue(result.isFailure)
     }
 
