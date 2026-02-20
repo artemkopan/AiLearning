@@ -31,7 +31,11 @@ data class ErrorPopupState(
     val message: String,
 )
 
-data class UiState(
+data class ChatId(val value: String)
+
+data class ChatState(
+    val id: ChatId,
+    val title: String,
     val prompt: String = "",
     val maxOutputTokens: String = "",
     val temperature: String = "",
@@ -39,6 +43,12 @@ data class UiState(
     val agentMode: AgentMode = AgentMode.DEFAULT,
     val isLoading: Boolean = false,
     val response: GenerationResult? = null,
+)
+
+data class UiState(
+    val chats: Map<ChatId, ChatState> = emptyMap(),
+    val chatOrder: List<ChatId> = emptyList(),
+    val activeChatId: ChatId? = null,
     val errorPopup: ErrorPopupState? = null,
 )
 
@@ -50,6 +60,9 @@ sealed interface UiAction {
     data class AgentModeChanged(val value: AgentMode) : UiAction
     data object Submit : UiAction
     data object DismissError : UiAction
+    data object CreateChat : UiAction
+    data class SelectChat(val chatId: ChatId) : UiAction
+    data class CloseChat(val chatId: ChatId) : UiAction
 }
 
 class AppViewModel(
@@ -57,11 +70,14 @@ class AppViewModel(
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(UiState())
-    private var generationJob: Job? = null
+    private val generationJobs = mutableMapOf<ChatId, Job>()
     val state: StateFlow<UiState> = _state.asStateFlow()
+
+    private var chatCounter = 0
 
     init {
         Napier.d(tag = TAG) { "AppViewModel initialized" }
+        handleCreateChat()
     }
 
     fun onAction(action: UiAction) {
@@ -73,15 +89,26 @@ class AppViewModel(
             is UiAction.AgentModeChanged -> handleAgentModeChanged(action.value)
             is UiAction.Submit -> handleSubmit()
             is UiAction.DismissError -> handleDismissError()
+            is UiAction.CreateChat -> handleCreateChat()
+            is UiAction.SelectChat -> handleSelectChat(action.chatId)
+            is UiAction.CloseChat -> handleCloseChat(action.chatId)
+        }
+    }
+
+    private fun updateActiveChat(block: ChatState.() -> ChatState) {
+        _state.update { state ->
+            val activeId = state.activeChatId ?: return@update state
+            val chat = state.chats[activeId] ?: return@update state
+            state.copy(chats = state.chats + (activeId to chat.block()))
         }
     }
 
     private fun handlePromptChanged(value: String) {
-        _state.update { it.copy(prompt = value) }
+        updateActiveChat { copy(prompt = value) }
     }
 
     private fun handleMaxOutputTokensChanged(value: String) {
-        _state.update { it.copy(maxOutputTokens = value.filter { ch -> ch.isDigit() }) }
+        updateActiveChat { copy(maxOutputTokens = value.filter { ch -> ch.isDigit() }) }
     }
 
     private fun handleTemperatureChanged(value: String) {
@@ -94,15 +121,15 @@ class AppViewModel(
                 }
             }
         }
-        _state.update { it.copy(temperature = filtered) }
+        updateActiveChat { copy(temperature = filtered) }
     }
 
     private fun handleStopSequencesChanged(value: String) {
-        _state.update { it.copy(stopSequences = value) }
+        updateActiveChat { copy(stopSequences = value) }
     }
 
     private fun handleAgentModeChanged(value: AgentMode) {
-        _state.update { it.copy(agentMode = value) }
+        updateActiveChat { copy(agentMode = value) }
     }
 
     private fun handleDismissError() {
@@ -111,7 +138,11 @@ class AppViewModel(
     }
 
     private fun handleSubmit() {
-        val currentPrompt = _state.value.prompt.trim()
+        val currentState = _state.value
+        val activeId = currentState.activeChatId ?: return
+        val chat = currentState.chats[activeId] ?: return
+        val currentPrompt = chat.prompt.trim()
+
         if (currentPrompt.isBlank()) {
             Napier.w(tag = TAG) { "Submit blocked: prompt is blank" }
             _state.update {
@@ -125,78 +156,149 @@ class AppViewModel(
             return
         }
 
-        // Cancel previous request if still running
-        generationJob?.let { job ->
+        // Cancel previous request for this chat if still running
+        generationJobs[activeId]?.let { job ->
             if (job.isActive) {
-                Napier.d(tag = TAG) { "Cancelling previous generation request" }
+                Napier.d(tag = TAG) { "Cancelling previous generation for chat ${activeId.value}" }
                 job.cancel()
             }
         }
 
-        Napier.i(tag = TAG) { "Submitting prompt: length=${currentPrompt.length}" }
-        _state.update { it.copy(isLoading = true, errorPopup = null) }
+        Napier.i(tag = TAG) { "Submitting prompt for chat ${activeId.value}: length=${currentPrompt.length}" }
 
-        val maxTokens = _state.value.maxOutputTokens.toIntOrNull()
-        val temperature = _state.value.temperature.toDoubleOrNull()
-        val stopSeqs = _state.value.stopSequences
+        _state.update { state ->
+            val updatedChat = state.chats[activeId]?.copy(isLoading = true) ?: return@update state
+            state.copy(
+                chats = state.chats + (activeId to updatedChat),
+                errorPopup = null,
+            )
+        }
+
+        val maxTokens = chat.maxOutputTokens.toIntOrNull()
+        val temperature = chat.temperature.toDoubleOrNull()
+        val stopSeqs = chat.stopSequences
             .split(",")
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .takeIf { it.isNotEmpty() }
 
-        generationJob = viewModelScope.launch {
+        val capturedId = activeId
+        generationJobs[capturedId] = viewModelScope.launch {
             gateway.generate(
                 GenerateRequestDto(
                     prompt = currentPrompt,
                     maxOutputTokens = maxTokens,
                     temperature = temperature,
                     stopSequences = stopSeqs,
-                    agentMode = _state.value.agentMode.takeIf { it != AgentMode.DEFAULT },
+                    agentMode = chat.agentMode.takeIf { it != AgentMode.DEFAULT },
                 )
             )
                 .onSuccess { dto ->
                     Napier.i(tag = TAG) {
-                        "Generation successful: requestId=${dto.requestId}, latencyMs=${dto.latencyMs}"
+                        "Generation successful for chat ${capturedId.value}: requestId=${dto.requestId}"
                     }
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            response = GenerationResult(
-                                text = dto.text,
-                                provider = dto.provider,
-                                model = dto.model,
-                                usage = dto.usage?.let { usage ->
-                                    UsageResult(
-                                        inputTokens = usage.inputTokens,
-                                        outputTokens = usage.outputTokens,
-                                        totalTokens = usage.totalTokens,
-                                    )
-                                },
-                            ),
+                    _state.update { state ->
+                        val existing = state.chats[capturedId] ?: return@update state
+                        state.copy(
+                            chats = state.chats + (capturedId to existing.copy(
+                                isLoading = false,
+                                response = GenerationResult(
+                                    text = dto.text,
+                                    provider = dto.provider,
+                                    model = dto.model,
+                                    usage = dto.usage?.let { usage ->
+                                        UsageResult(
+                                            inputTokens = usage.inputTokens,
+                                            outputTokens = usage.outputTokens,
+                                            totalTokens = usage.totalTokens,
+                                        )
+                                    },
+                                ),
+                            )),
                         )
                     }
                 }
                 .onFailure { throwable ->
-                    Napier.e(tag = TAG, throwable = throwable) { "Generation failed" }
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
+                    Napier.e(tag = TAG, throwable = throwable) {
+                        "Generation failed for chat ${capturedId.value}"
+                    }
+                    _state.update { state ->
+                        val existing = state.chats[capturedId] ?: return@update state
+                        state.copy(
+                            chats = state.chats + (capturedId to existing.copy(isLoading = false)),
                             errorPopup = ErrorPopupState(
                                 title = "Request Failed",
                                 message = throwable.message ?: "Unexpected error. Please try again.",
-                            )
+                            ),
                         )
                     }
                 }
         }
     }
 
+    private fun handleCreateChat() {
+        val currentState = _state.value
+        if (currentState.chatOrder.size >= MAX_CHATS) {
+            Napier.w(tag = TAG) { "Cannot create chat: max $MAX_CHATS reached" }
+            return
+        }
+
+        chatCounter++
+        val newId = ChatId("chat-$chatCounter")
+        val newChat = ChatState(id = newId, title = "Chat $chatCounter")
+
+        _state.update { state ->
+            state.copy(
+                chats = state.chats + (newId to newChat),
+                chatOrder = state.chatOrder + newId,
+                activeChatId = newId,
+            )
+        }
+        Napier.d(tag = TAG) { "Created chat ${newId.value}" }
+    }
+
+    private fun handleSelectChat(chatId: ChatId) {
+        _state.update { it.copy(activeChatId = chatId) }
+    }
+
+    private fun handleCloseChat(chatId: ChatId) {
+        // Cancel any running generation for this chat
+        generationJobs.remove(chatId)?.cancel()
+
+        _state.update { state ->
+            val newOrder = state.chatOrder - chatId
+            val newChats = state.chats - chatId
+
+            // Select a neighbor if closing the active chat
+            val newActiveId = if (state.activeChatId == chatId) {
+                val oldIndex = state.chatOrder.indexOf(chatId)
+                when {
+                    newOrder.isEmpty() -> null
+                    oldIndex >= newOrder.size -> newOrder.last()
+                    else -> newOrder[oldIndex]
+                }
+            } else {
+                state.activeChatId
+            }
+
+            state.copy(
+                chats = newChats,
+                chatOrder = newOrder,
+                activeChatId = newActiveId,
+            )
+        }
+        Napier.d(tag = TAG) { "Closed chat ${chatId.value}" }
+    }
+
     override fun onCleared() {
         super.onCleared()
+        generationJobs.values.forEach { it.cancel() }
+        generationJobs.clear()
         Napier.d(tag = TAG) { "AppViewModel cleared" }
     }
 
     private companion object {
         const val TAG = "AppViewModel"
+        const val MAX_CHATS = 5
     }
 }

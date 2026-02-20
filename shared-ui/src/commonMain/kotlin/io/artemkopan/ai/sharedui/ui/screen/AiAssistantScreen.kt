@@ -2,12 +2,10 @@ package io.artemkopan.ai.sharedui.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
@@ -20,9 +18,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedui.state.AppViewModel
+import io.artemkopan.ai.sharedui.state.ChatState
 import io.artemkopan.ai.sharedui.state.UiAction
 import io.artemkopan.ai.sharedui.state.UiState
 import io.artemkopan.ai.sharedui.ui.component.AgentModeSelector
+import io.artemkopan.ai.sharedui.ui.component.ChatSidePanel
 import io.artemkopan.ai.sharedui.ui.component.ConfigPanel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkTextField
 import io.artemkopan.ai.sharedui.ui.component.ErrorDialog
@@ -49,6 +49,9 @@ private fun AiAssistantContent(
     state: UiState,
     onAction: (UiAction) -> Unit,
 ) {
+    val activeChat = state.activeChatId?.let { state.chats[it] }
+    val orderedChats = state.chatOrder.mapNotNull { state.chats[it] }
+
     CyberpunkTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -60,22 +63,37 @@ private fun AiAssistantContent(
             ) {
                 ScreenHeader()
 
-                PromptWithConfigRow(state = state, onAction = onAction)
-
-                SubmitButton(
-                    isLoading = state.isLoading,
-                    onClick = { onAction(UiAction.Submit) },
-                )
-
-                if (state.isLoading) {
-                    StatusPanel(modifier = Modifier.fillMaxWidth())
-                }
-
-                state.response?.let { response ->
-                    OutputPanel(
-                        response = response,
-                        modifier = Modifier.fillMaxWidth().weight(1f),
+                Row(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    // Left column — chat list
+                    ChatSidePanel(
+                        chats = orderedChats,
+                        activeChatId = state.activeChatId,
+                        onChatSelected = { onAction(UiAction.SelectChat(it)) },
+                        onChatClosed = { onAction(UiAction.CloseChat(it)) },
+                        onNewChatClicked = { onAction(UiAction.CreateChat) },
+                        modifier = Modifier.width(160.dp).fillMaxHeight(),
                     )
+
+                    // Center column — prompt + output
+                    if (activeChat != null) {
+                        CenterPromptColumn(
+                            chat = activeChat,
+                            onAction = onAction,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        )
+                    }
+
+                    // Right column — settings
+                    if (activeChat != null) {
+                        SettingsColumn(
+                            chat = activeChat,
+                            onAction = onAction,
+                            modifier = Modifier.width(220.dp).fillMaxHeight(),
+                        )
+                    }
                 }
             }
         }
@@ -106,41 +124,69 @@ private fun ScreenHeader() {
 }
 
 @Composable
-private fun PromptWithConfigRow(
-    state: UiState,
+private fun CenterPromptColumn(
+    chat: ChatState,
     onAction: (UiAction) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        val hasResponse = chat.response != null
+
         CyberpunkTextField(
-            value = state.prompt,
+            value = chat.prompt,
             onValueChange = { onAction(UiAction.PromptChanged(it)) },
             label = "// ENTER PROMPT",
-            modifier = Modifier.weight(1f).fillMaxHeight(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (hasResponse) Modifier else Modifier.weight(1f)),
             minLines = 8,
         )
 
-        Column(
-            modifier = Modifier.width(220.dp).fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AgentModeSelector(
-                selected = state.agentMode,
-                onModeSelected = { onAction(UiAction.AgentModeChanged(it)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
+        SubmitButton(
+            isLoading = chat.isLoading,
+            onClick = { onAction(UiAction.Submit) },
+        )
 
-            ConfigPanel(
-                maxOutputTokens = state.maxOutputTokens,
-                onMaxOutputTokensChanged = { onAction(UiAction.MaxOutputTokensChanged(it)) },
-                temperature = state.temperature,
-                onTemperatureChanged = { onAction(UiAction.TemperatureChanged(it)) },
-                stopSequences = state.stopSequences,
-                onStopSequencesChanged = { onAction(UiAction.StopSequencesChanged(it)) },
-                modifier = Modifier.fillMaxWidth(),
+        if (chat.isLoading) {
+            StatusPanel(modifier = Modifier.fillMaxWidth())
+        }
+
+        chat.response?.let { response ->
+            OutputPanel(
+                response = response,
+                modifier = Modifier.fillMaxWidth().weight(1f),
             )
         }
+    }
+}
+
+@Composable
+private fun SettingsColumn(
+    chat: ChatState,
+    onAction: (UiAction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AgentModeSelector(
+            selected = chat.agentMode,
+            onModeSelected = { onAction(UiAction.AgentModeChanged(it)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        ConfigPanel(
+            maxOutputTokens = chat.maxOutputTokens,
+            onMaxOutputTokensChanged = { onAction(UiAction.MaxOutputTokensChanged(it)) },
+            temperature = chat.temperature,
+            onTemperatureChanged = { onAction(UiAction.TemperatureChanged(it)) },
+            stopSequences = chat.stopSequences,
+            onStopSequencesChanged = { onAction(UiAction.StopSequencesChanged(it)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
