@@ -2,13 +2,12 @@ package io.artemkopan.ai.backend.config
 
 data class AppConfig(
     val port: Int,
-    val geminiApiKey: String,
-    val defaultModel: String,
+    val projectsRoot: String,
     val corsOrigin: String,
 ) {
     fun validate() {
-        require(geminiApiKey.isNotBlank()) {
-            "GEMINI_API_KEY is required but was not provided. Please set it in your .env file or environment variables."
+        require(projectsRoot.isNotBlank()) {
+            "PROJECTS_ROOT is required. Please set it in your .env file or environment variables."
         }
     }
 
@@ -16,8 +15,7 @@ data class AppConfig(
         fun fromEnv(env: Map<String, String> = EnvSource.load()): AppConfig {
             return AppConfig(
                 port = env["PORT"]?.toIntOrNull() ?: 8080,
-                geminiApiKey = env["GEMINI_API_KEY"].orEmpty(),
-                defaultModel = env["GEMINI_MODEL"].orEmpty().ifBlank { "gemini-2.5-flash" },
+                projectsRoot = env["PROJECTS_ROOT"].orEmpty().ifBlank { "/projects" },
                 corsOrigin = env["CORS_ORIGIN"].orEmpty()
                     .removePrefix("http://")
                     .removePrefix("https://")

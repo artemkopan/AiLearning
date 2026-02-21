@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Usage: notify-status <chatId> <status> [eventId] [title]
+set -euo pipefail
+
+BACKEND_URL="${BACKEND_URL:-http://localhost:8080}"
+CHAT_ID="${1:?Usage: notify-status <chatId> <status> [eventId] [title]}"
+STATUS="${2:?Usage: notify-status <chatId> <status> [eventId] [title]}"
+EVENT_ID="${3:-}"
+TITLE="${4:-}"
+
+BODY=$(cat <<EOF
+{
+  "chatId": "$CHAT_ID",
+  "status": "$STATUS"
+  $([ -n "$EVENT_ID" ] && echo ", \"eventId\": \"$EVENT_ID\"")
+  $([ -n "$TITLE" ] && echo ", \"title\": \"$TITLE\"")
+}
+EOF
+)
+
+curl -s -X POST "$BACKEND_URL/api/status" \
+  -H "Content-Type: application/json" \
+  -d "$BODY" > /dev/null

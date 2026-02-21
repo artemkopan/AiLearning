@@ -13,12 +13,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies")
     }
 }
 
-include(":core:domain")
-include(":core:application")
-include(":core:data")
 include(":shared-contract")
 include(":shared-ui")
 include(":backend")

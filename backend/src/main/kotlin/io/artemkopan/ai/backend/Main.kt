@@ -22,11 +22,10 @@ fun main() {
     Logger.withTag("Startup").i { "Logging initialized" }
     logger.info("Loaded .env files: {}", loadedFiles)
     logger.info(
-        "Loaded config: port={}, geminiModel={}, corsOrigin={}, geminiApiKey={}",
+        "Loaded config: port={}, projectsRoot={}, corsOrigin={}",
         config.port,
-        config.defaultModel,
+        config.projectsRoot,
         config.corsOrigin,
-        maskSecret(config.geminiApiKey),
     )
 
     try {
@@ -40,10 +39,4 @@ fun main() {
     embeddedServer(Netty, port = config.port, host = "0.0.0.0") {
         module(config)
     }.start(wait = true)
-}
-
-private fun maskSecret(value: String): String {
-    if (value.isBlank()) return "<missing>"
-    if (value.length <= 8) return "****"
-    return "${value.take(4)}...${value.takeLast(4)}"
 }

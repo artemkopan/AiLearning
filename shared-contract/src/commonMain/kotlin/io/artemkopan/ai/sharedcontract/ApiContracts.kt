@@ -3,51 +3,57 @@ package io.artemkopan.ai.sharedcontract
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class GenerateRequestDto(
-    val prompt: String,
-    val model: String? = null,
-    val temperature: Double? = null,
-    val maxOutputTokens: Int? = null,
-    val stopSequences: List<String>? = null,
-    val agentMode: AgentMode? = null,
+data class ProjectInfo(
+    val name: String,
+    val path: String,
 )
 
 @Serializable
-data class TokenUsageDto(
-    val inputTokens: Int,
-    val outputTokens: Int,
-    val totalTokens: Int,
+data class CreateChatRequest(
+    val projectPath: String,
 )
 
 @Serializable
-data class GenerateResponseDto(
-    val text: String,
-    val provider: String,
-    val model: String,
-    val usage: TokenUsageDto? = null,
-    val requestId: String,
-    val latencyMs: Long,
+data class CreateChatResponse(
+    val chatId: String,
+)
+
+@Serializable
+data class ChatInfo(
+    val chatId: String,
+    val projectPath: String,
+    val status: ChatStatus,
+    val since: String,
+)
+
+@Serializable
+enum class ChatStatus {
+    idle, running, done, failed, attention
+}
+
+@Serializable
+data class StatusEvent(
+    val type: String = "status",
+    val chatId: String,
+    val status: ChatStatus,
+    val eventId: String? = null,
+    val exitCode: Int? = null,
+    val title: String? = null,
+    val since: String,
+)
+
+@Serializable
+data class StatusUpdateRequest(
+    val chatId: String,
+    val status: ChatStatus,
+    val eventId: String? = null,
+    val title: String? = null,
+    val body: String? = null,
+    val exitCode: Int? = null,
 )
 
 @Serializable
 data class ErrorResponseDto(
     val code: String,
     val message: String,
-    val requestId: String,
-)
-
-@Serializable
-data class ModelOptionDto(
-    val id: String,
-    val name: String,
-    val provider: String,
-)
-
-@Serializable
-data class ChatConfigDto(
-    val models: List<ModelOptionDto>,
-    val defaultModel: String,
-    val temperatureMin: Double,
-    val temperatureMax: Double,
-    val defaultTemperature: Double,
 )

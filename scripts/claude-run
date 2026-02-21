@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Usage: claude-run <chatId> [claude args...]
+# Wrapper: notifies running, runs claude, then notifies done/failed
+set -euo pipefail
+
+CHAT_ID="${1:?Usage: claude-run <chatId> [claude args...]}"
+shift
+
+notify-status "$CHAT_ID" "running"
+
+EXIT_CODE=0
+claude "$@" || EXIT_CODE=$?
+
+notify-done "$CHAT_ID" "$EXIT_CODE"
+exit "$EXIT_CODE"

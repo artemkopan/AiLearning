@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Usage: notify-done <chatId> <exitCode>
+set -euo pipefail
+
+BACKEND_URL="${BACKEND_URL:-http://localhost:8080}"
+CHAT_ID="${1:?Usage: notify-done <chatId> <exitCode>}"
+EXIT_CODE="${2:?Usage: notify-done <chatId> <exitCode>}"
+
+if [ "$EXIT_CODE" -eq 0 ]; then
+  STATUS="done"
+else
+  STATUS="failed"
+fi
+
+curl -s -X POST "$BACKEND_URL/api/status" \
+  -H "Content-Type: application/json" \
+  -d "{\"chatId\": \"$CHAT_ID\", \"status\": \"$STATUS\", \"exitCode\": $EXIT_CODE}" > /dev/null

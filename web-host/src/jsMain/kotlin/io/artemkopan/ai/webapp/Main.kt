@@ -2,40 +2,29 @@ package io.artemkopan.ai.webapp
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.CanvasBasedWindow
-import io.artemkopan.ai.sharedui.di.sharedUiModules
-import io.artemkopan.ai.sharedui.state.AppViewModel
-import io.artemkopan.ai.sharedui.ui.screen.AiAssistantScreen
-import io.artemkopan.ai.webapp.ui.HttpPromptGateway
 import co.touchlab.kermit.Logger
-import kotlinx.browser.window
+import io.artemkopan.ai.sharedui.di.sharedModule
+import io.artemkopan.ai.sharedui.gateway.BACKEND_BASE_URL
+import io.artemkopan.ai.sharedui.state.AppViewModel
+import io.artemkopan.ai.sharedui.ui.screen.TerminalScreen
 import org.koin.compose.KoinApplication
 import org.koin.compose.viewmodel.koinViewModel
 
-private fun resolveBackendUrl(): String {
-    // In production, use same origin. For local dev, override via query param: ?backend=http://localhost:8080
-    val params = window.location.search
-    val backendParam = params.removePrefix("?")
-        .split("&")
-        .map { it.split("=", limit = 2) }
-        .find { it.firstOrNull() == "backend" }
-        ?.getOrNull(1)
-
-    return backendParam ?: "http://localhost:8080"
-}
-
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    val backendUrl = resolveBackendUrl()
-    Logger.withTag("Main").i { "Frontend initialized. Backend URL: $backendUrl" }
+    Logger.withTag("Main").i { "Frontend initialized. Backend URL: $BACKEND_BASE_URL" }
 
-    val gateway = HttpPromptGateway(backendBaseUrl = backendUrl)
+    val xtermBridge = XtermBridge(BACKEND_BASE_URL)
 
-    CanvasBasedWindow(title = "AiAssistant") {
+    CanvasBasedWindow(title = "Terminal") {
         KoinApplication(application = {
-            modules(sharedUiModules(gateway))
+            modules(sharedModule)
         }) {
             val viewModel = koinViewModel<AppViewModel>()
-            AiAssistantScreen(viewModel)
+            TerminalScreen(
+                viewModel = viewModel,
+                onActiveChatChanged = { chatId -> xtermBridge.switchChat(chatId) },
+            )
         }
     }
 }
