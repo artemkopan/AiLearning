@@ -5,11 +5,16 @@ import io.artemkopan.ai.backend.terminal.ChatManager
 import io.artemkopan.ai.backend.terminal.EventBus
 import io.artemkopan.ai.backend.terminal.PtyBridge
 import io.artemkopan.ai.backend.terminal.StatusManager
+import io.artemkopan.ai.sharedcontract.ChatCreatedEvent
+import io.artemkopan.ai.sharedcontract.ChatInfo
+import io.artemkopan.ai.sharedcontract.ChatStatus
 import io.artemkopan.ai.sharedcontract.CreateChatRequest
 import io.artemkopan.ai.sharedcontract.CreateChatResponse
 import io.artemkopan.ai.sharedcontract.ErrorResponseDto
 import io.artemkopan.ai.sharedcontract.ProjectInfo
 import io.artemkopan.ai.sharedcontract.StatusUpdateRequest
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
@@ -32,6 +37,7 @@ fun Application.configureRoutes() {
     val ptyBridge by inject<PtyBridge>()
     val config by inject<AppConfig>()
     val logger = log
+    val json = Json { explicitNulls = false }
 
     routing {
         get("/health") {
@@ -56,6 +62,13 @@ fun Application.configureRoutes() {
             post("/chats") {
                 val request = call.receive<CreateChatRequest>()
                 val chatId = chatManager.createChat(request.projectPath)
+                val chatInfo = ChatInfo(
+                    chatId = chatId,
+                    projectPath = request.projectPath,
+                    status = ChatStatus.idle,
+                    since = java.time.Instant.now().toString(),
+                )
+                eventBus.broadcast(json.encodeToString(ChatCreatedEvent(chat = chatInfo)))
                 call.respond(HttpStatusCode.Created, CreateChatResponse(chatId = chatId))
             }
 
@@ -67,7 +80,7 @@ fun Application.configureRoutes() {
             post("/status") {
                 val request = call.receive<StatusUpdateRequest>()
                 val event = statusManager.applyUpdate(request)
-                eventBus.broadcast(event)
+                eventBus.broadcast(json.encodeToString(event))
                 logger.info("Status updated for chat ${request.chatId}: ${request.status}")
                 call.respond(HttpStatusCode.OK, mapOf("ok" to true))
             }

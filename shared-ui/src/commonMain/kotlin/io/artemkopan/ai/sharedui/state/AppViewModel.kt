@@ -3,8 +3,10 @@ package io.artemkopan.ai.sharedui.state
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
+import io.artemkopan.ai.sharedcontract.ChatInfo
 import io.artemkopan.ai.sharedcontract.ChatStatus
 import io.artemkopan.ai.sharedcontract.ProjectInfo
+import io.artemkopan.ai.sharedui.gateway.WsEvent
 import io.artemkopan.ai.sharedui.usecase.CreateChatUseCase
 import io.artemkopan.ai.sharedui.usecase.LoadChatsUseCase
 import io.artemkopan.ai.sharedui.usecase.LoadProjectsUseCase
@@ -111,7 +113,12 @@ class AppViewModel(
             while (true) {
                 try {
                     observeStatusEvents { event ->
-                        onAction(UiAction.StatusUpdated(event.chatId, event.status))
+                        when (event) {
+                            is WsEvent.Status -> onAction(
+                                UiAction.StatusUpdated(event.event.chatId, event.event.status)
+                            )
+                            is WsEvent.ChatCreated -> handleChatCreatedEvent(event.event.chat)
+                        }
                     }
                 } catch (e: Exception) {
                     log.w(e) { "Event listener disconnected, retrying..." }
@@ -150,6 +157,20 @@ class AppViewModel(
                         )
                     }
                 }
+        }
+    }
+
+    private fun handleChatCreatedEvent(chat: ChatInfo) {
+        _state.update { state ->
+            // Skip if we already have this chat (e.g. we created it ourselves)
+            if (state.chats.any { it.chatId == chat.chatId }) return@update state
+            val tab = ChatTab(
+                chatId = chat.chatId,
+                projectPath = chat.projectPath,
+                projectName = chat.projectPath.substringAfterLast('/'),
+                status = chat.status,
+            )
+            state.copy(chats = state.chats + tab)
         }
     }
 

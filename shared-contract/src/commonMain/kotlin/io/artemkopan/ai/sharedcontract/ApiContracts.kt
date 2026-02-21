@@ -53,6 +53,12 @@ data class StatusUpdateRequest(
 )
 
 @Serializable
+data class ChatCreatedEvent(
+    val type: String = "chat_created",
+    val chat: ChatInfo,
+)
+
+@Serializable
 data class ErrorResponseDto(
     val code: String,
     val message: String,
