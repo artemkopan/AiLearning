@@ -1,14 +1,20 @@
 package io.artemkopan.ai.sharedui.ui.theme
 
+import aiassistant.shared_ui.generated.resources.Res
+import aiassistant.shared_ui.generated.resources.inter_regular
+import aiassistant.shared_ui.generated.resources.jetbrains_mono_regular
+import aiassistant.shared_ui.generated.resources.noto_emoji_regular
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import org.jetbrains.compose.resources.Font
 
 private val CyberpunkColorScheme = darkColorScheme(
     primary = CyberpunkColors.Yellow,
@@ -74,9 +80,23 @@ private val CyberpunkTypography = Typography(
 
 @Composable
 fun CyberpunkTheme(content: @Composable () -> Unit) {
+    val emojiFont = Font(Res.font.noto_emoji_regular)
+    val interFont = Font(Res.font.inter_regular)
+    val jetbrainsMonoFont = Font(Res.font.jetbrains_mono_regular)
+
+    val typography = remember(interFont, jetbrainsMonoFont, emojiFont) {
+        val sansEmoji = FontFamily(interFont, emojiFont)
+        val monoEmoji = FontFamily(jetbrainsMonoFont, emojiFont)
+        CyberpunkTypography.copy(
+            bodyLarge = CyberpunkTypography.bodyLarge.copy(fontFamily = sansEmoji),
+            bodyMedium = CyberpunkTypography.bodyMedium.copy(fontFamily = sansEmoji),
+            bodySmall = CyberpunkTypography.bodySmall.copy(fontFamily = monoEmoji),
+        )
+    }
+
     MaterialTheme(
         colorScheme = CyberpunkColorScheme,
-        typography = CyberpunkTypography,
+        typography = typography,
         content = content,
     )
 }
