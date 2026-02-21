@@ -37,6 +37,7 @@ data class ChatState(
     val id: ChatId,
     val title: String,
     val prompt: String = "",
+    val model: String = "",
     val maxOutputTokens: String = "",
     val temperature: String = "",
     val stopSequences: String = "",
@@ -54,6 +55,7 @@ data class UiState(
 
 sealed interface UiAction {
     data class PromptChanged(val value: String) : UiAction
+    data class ModelChanged(val value: String) : UiAction
     data class MaxOutputTokensChanged(val value: String) : UiAction
     data class TemperatureChanged(val value: String) : UiAction
     data class StopSequencesChanged(val value: String) : UiAction
@@ -83,6 +85,7 @@ class AppViewModel(
     fun onAction(action: UiAction) {
         when (action) {
             is UiAction.PromptChanged -> handlePromptChanged(action.value)
+            is UiAction.ModelChanged -> handleModelChanged(action.value)
             is UiAction.MaxOutputTokensChanged -> handleMaxOutputTokensChanged(action.value)
             is UiAction.TemperatureChanged -> handleTemperatureChanged(action.value)
             is UiAction.StopSequencesChanged -> handleStopSequencesChanged(action.value)
@@ -104,7 +107,19 @@ class AppViewModel(
     }
 
     private fun handlePromptChanged(value: String) {
-        updateActiveChat { copy(prompt = value) }
+        updateActiveChat {
+            val firstLine = value.lineSequence().firstOrNull()?.trim().orEmpty()
+            val newTitle = if (firstLine.isNotEmpty()) {
+                firstLine.take(MAX_TITLE_LENGTH)
+            } else {
+                "Chat ${id.value.substringAfter("chat-")}"
+            }
+            copy(prompt = value, title = newTitle)
+        }
+    }
+
+    private fun handleModelChanged(value: String) {
+        updateActiveChat { copy(model = value) }
     }
 
     private fun handleMaxOutputTokensChanged(value: String) {
@@ -187,6 +202,7 @@ class AppViewModel(
             gateway.generate(
                 GenerateRequestDto(
                     prompt = currentPrompt,
+                    model = chat.model.trim().takeIf { it.isNotEmpty() },
                     maxOutputTokens = maxTokens,
                     temperature = temperature,
                     stopSequences = stopSeqs,
@@ -300,5 +316,6 @@ class AppViewModel(
     private companion object {
         const val TAG = "AppViewModel"
         const val MAX_CHATS = 5
+        const val MAX_TITLE_LENGTH = 20
     }
 }

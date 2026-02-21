@@ -8,6 +8,8 @@ import androidx.compose.ui.text.input.KeyboardType
 
 @Composable
 fun ConfigPanel(
+    model: String,
+    onModelChanged: (String) -> Unit,
     maxOutputTokens: String,
     onMaxOutputTokensChanged: (String) -> Unit,
     temperature: String,
@@ -20,6 +22,15 @@ fun ConfigPanel(
         title = "CONFIG",
         modifier = modifier,
     ) {
+        CyberpunkTextField(
+            value = model,
+            onValueChange = onModelChanged,
+            label = "MODEL",
+            placeholder = "server default",
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
+
         CyberpunkTextField(
             value = maxOutputTokens,
             onValueChange = onMaxOutputTokensChanged,

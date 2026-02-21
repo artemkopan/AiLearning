@@ -181,6 +181,8 @@ private fun SettingsColumn(
         )
 
         ConfigPanel(
+            model = chat.model,
+            onModelChanged = { onAction(UiAction.ModelChanged(it)) },
             maxOutputTokens = chat.maxOutputTokens,
             onMaxOutputTokensChanged = { onAction(UiAction.MaxOutputTokensChanged(it)) },
             temperature = chat.temperature,
