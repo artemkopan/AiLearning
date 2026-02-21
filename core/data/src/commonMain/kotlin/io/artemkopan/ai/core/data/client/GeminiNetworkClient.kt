@@ -13,6 +13,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 class GeminiNetworkClient(
     private val httpClient: HttpClient,
@@ -21,6 +23,10 @@ class GeminiNetworkClient(
 ) : LlmNetworkClient {
 
     private val log = Logger.withTag("GeminiNetworkClient")
+    private val requestJson = Json {
+        explicitNulls = false
+        encodeDefaults = false
+    }
 
     override suspend fun generate(request: NetworkGenerateRequest): Result<NetworkGenerateResponse> {
         if (apiKey.isBlank()) {
@@ -32,26 +38,26 @@ class GeminiNetworkClient(
         val startTime = currentTimeMillis()
 
         return runCatching {
-            val response: GeminiGenerateResponse = httpClient.post(
-                "$baseUrl/models/${request.model}:generateContent"
-            ) {
+            val endpoint = "$baseUrl/models/${request.model}:generateContent"
+            val requestBody = GeminiGenerateRequest(
+                contents = listOf(
+                    GeminiContent(parts = listOf(GeminiPart(text = request.prompt)))
+                ),
+                generationConfig = GeminiGenerationConfig(
+                    temperature = request.temperature,
+                    maxOutputTokens = request.maxOutputTokens,
+                    stopSequences = request.stopSequences,
+                ),
+                systemInstruction = request.systemInstruction?.let {
+                    GeminiContent(parts = listOf(GeminiPart(text = it)))
+                },
+            )
+            log.i { "LLM request curl (api key redacted): ${toCurlCommand(endpoint, requestBody)}" }
+
+            val response: GeminiGenerateResponse = httpClient.post(endpoint) {
                 header("x-goog-api-key", apiKey)
                 contentType(ContentType.Application.Json)
-                setBody(
-                    GeminiGenerateRequest(
-                        contents = listOf(
-                            GeminiContent(parts = listOf(GeminiPart(text = request.prompt)))
-                        ),
-                        generationConfig = GeminiGenerationConfig(
-                            temperature = request.temperature,
-                            maxOutputTokens = request.maxOutputTokens,
-                            stopSequences = request.stopSequences,
-                        ),
-                        systemInstruction = request.systemInstruction?.let {
-                            GeminiContent(parts = listOf(GeminiPart(text = it)))
-                        },
-                    )
-                )
+                setBody(requestBody)
             }.body()
 
             val text = response.candidates
@@ -105,6 +111,20 @@ class GeminiNetworkClient(
             }
             throw mappedError
         }
+    }
+
+    private fun toCurlCommand(endpoint: String, body: GeminiGenerateRequest): String {
+        val payload = requestJson.encodeToString(body)
+        return listOf(
+            "curl -X POST ${shQuote(endpoint)}",
+            "-H ${shQuote("x-goog-api-key: <REDACTED>")}",
+            "-H ${shQuote("Content-Type: application/json")}",
+            "-d ${shQuote(payload)}",
+        ).joinToString(" ")
+    }
+
+    private fun shQuote(value: String): String {
+        return "'${value.replace("'", "'\"'\"'")}'"
     }
 }
 
