@@ -14,7 +14,7 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":core:domain"))
             implementation(libs.kotlinx.coroutines.core)
-            implementation(libs.napier)
+            implementation(libs.kermit)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

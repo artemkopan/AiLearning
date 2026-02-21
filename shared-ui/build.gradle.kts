@@ -20,7 +20,7 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.components.resources)
-            implementation(libs.napier)
+            implementation(libs.kermit)
             implementation(libs.lifecycle.viewmodel.compose)
             api(libs.koin.core)
             api(libs.koin.compose)

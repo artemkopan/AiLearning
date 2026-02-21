@@ -6,7 +6,7 @@ import io.artemkopan.ai.core.application.model.GenerateOutput
 import io.artemkopan.ai.core.application.model.UsageOutput
 import io.artemkopan.ai.core.domain.model.LlmGenerationInput
 import io.artemkopan.ai.core.domain.repository.LlmRepository
-import io.github.aakira.napier.Napier
+import co.touchlab.kermit.Logger
 
 class GenerateTextUseCase(
     private val repository: LlmRepository,
@@ -15,11 +15,13 @@ class GenerateTextUseCase(
     private val resolveAgentModeUseCase: ResolveAgentModeUseCase,
     private val errorMapper: DomainErrorMapper,
 ) {
+    private val log = Logger.withTag("GenerateTextUseCase")
+
     suspend fun execute(command: GenerateCommand): Result<GenerateOutput> {
-        Napier.d(tag = TAG) { "Executing generate text: promptLength=${command.prompt.length}" }
+        log.d { "Executing generate text: promptLength=${command.prompt.length}" }
 
         val prompt = validatePromptUseCase.execute(command.prompt).getOrElse { error ->
-            Napier.w(tag = TAG) { "Prompt validation failed: ${error.message}" }
+            log.w { "Prompt validation failed: ${error.message}" }
             return Result.failure(error)
         }
 
@@ -27,16 +29,16 @@ class GenerateTextUseCase(
             command.model, command.temperature, command.maxOutputTokens, command.stopSequences,
         )
             .getOrElse { error ->
-                Napier.w(tag = TAG) { "Options resolution failed: ${error.message}" }
+                log.w { "Options resolution failed: ${error.message}" }
                 return Result.failure(error)
             }
 
         val systemInstruction = resolveAgentModeUseCase.execute(command.agentMode).getOrElse { error ->
-            Napier.w(tag = TAG) { "Agent mode resolution failed: ${error.message}" }
+            log.w { "Agent mode resolution failed: ${error.message}" }
             return Result.failure(error)
         }
 
-        Napier.d(tag = TAG) { "Calling repository: model=${options.modelId.value}, temp=${options.temperature.value}" }
+        log.d { "Calling repository: model=${options.modelId.value}, temp=${options.temperature.value}" }
 
         return repository.generate(
             LlmGenerationInput(
@@ -48,7 +50,7 @@ class GenerateTextUseCase(
                 systemInstruction = systemInstruction,
             )
         ).map { generation ->
-            Napier.i(tag = TAG) {
+            log.i {
                 "Generation successful: provider=${generation.provider}, totalTokens=${generation.usage?.totalTokens ?: 0}"
             }
             GenerateOutput(
@@ -65,12 +67,8 @@ class GenerateTextUseCase(
             )
         }.recoverCatching { throwable ->
             val mappedError = errorMapper.mapToAppError(throwable)
-            Napier.e(tag = TAG, throwable = throwable) { "Generation failed: ${mappedError.message}" }
+            log.e(throwable) { "Generation failed: ${mappedError.message}" }
             throw mappedError
         }
-    }
-
-    private companion object {
-        const val TAG = "GenerateTextUseCase"
     }
 }

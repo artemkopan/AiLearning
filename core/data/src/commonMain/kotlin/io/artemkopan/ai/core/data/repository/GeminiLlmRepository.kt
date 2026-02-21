@@ -8,13 +8,16 @@ import io.artemkopan.ai.core.domain.model.LlmGeneration
 import io.artemkopan.ai.core.domain.model.LlmGenerationInput
 import io.artemkopan.ai.core.domain.model.TokenUsage
 import io.artemkopan.ai.core.domain.repository.LlmRepository
-import io.github.aakira.napier.Napier
+import co.touchlab.kermit.Logger
 
 class GeminiLlmRepository(
     private val networkClient: LlmNetworkClient,
 ) : LlmRepository {
+
+    private val log = Logger.withTag("GeminiLlmRepository")
+
     override suspend fun generate(input: LlmGenerationInput): Result<LlmGeneration> {
-        Napier.d(tag = TAG) { "Repository generate called: model=${input.modelId.value}" }
+        log.d { "Repository generate called: model=${input.modelId.value}" }
 
         return networkClient.generate(
             NetworkGenerateRequest(
@@ -26,7 +29,7 @@ class GeminiLlmRepository(
                 systemInstruction = input.systemInstruction?.value,
             )
         ).map { response ->
-            Napier.d(tag = TAG) { "Repository mapping response: provider=${response.provider}" }
+            log.d { "Repository mapping response: provider=${response.provider}" }
             LlmGeneration(
                 text = response.text,
                 provider = response.provider,
@@ -40,7 +43,7 @@ class GeminiLlmRepository(
                 },
             )
         }.recoverCatching { throwable ->
-            Napier.e(tag = TAG, throwable = throwable) { "Repository generate failed" }
+            log.e(throwable) { "Repository generate failed" }
             throw mapToDomainError(throwable)
         }
     }
@@ -52,9 +55,5 @@ class GeminiLlmRepository(
         is DataError.NetworkError -> DomainError.ProviderUnavailable(throwable.message ?: "Network error", throwable)
         is DomainError -> throwable
         else -> DomainError.Unexpected(throwable.message ?: "Unexpected error", throwable)
-    }
-
-    private companion object {
-        const val TAG = "GeminiLlmRepository"
     }
 }

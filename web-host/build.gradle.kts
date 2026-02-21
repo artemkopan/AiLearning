@@ -20,7 +20,7 @@ kotlin {
             implementation(compose.ui)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
-            implementation(libs.napier)
+            implementation(libs.kermit)
             implementation(libs.lifecycle.viewmodel.compose)
         }
         commonTest.dependencies {

@@ -31,7 +31,7 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.client.logging)
     implementation(libs.logback.classic)
-    implementation(libs.napier)
+    implementation(libs.kermit)
     implementation(libs.koin.ktor)
     implementation(libs.koin.logger.slf4j)
 

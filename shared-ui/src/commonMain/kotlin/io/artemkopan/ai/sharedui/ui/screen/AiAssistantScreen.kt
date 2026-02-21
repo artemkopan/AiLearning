@@ -17,10 +17,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -35,6 +41,7 @@ import io.artemkopan.ai.sharedui.ui.component.ConfigPanel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkTextField
 import io.artemkopan.ai.sharedui.ui.component.ErrorDialog
 import io.artemkopan.ai.sharedui.ui.component.InsertFromChatPopup
+import io.artemkopan.ai.sharedui.ui.component.buildInsertItems
 import io.artemkopan.ai.sharedui.ui.component.OutputPanel
 import io.artemkopan.ai.sharedui.ui.component.StatusPanel
 import io.artemkopan.ai.sharedui.ui.component.SubmitButton
@@ -157,6 +164,25 @@ private fun CenterPromptColumn(
 
         var showInsertPopup by remember { mutableStateOf(false) }
         var slashPosition by remember { mutableStateOf(-1) }
+        var selectedIndex by remember { mutableIntStateOf(0) }
+
+        val insertItems = remember(otherChats) { buildInsertItems(otherChats) }
+
+        fun performInsert(content: String) {
+            if (slashPosition >= 0) {
+                textFieldValue = insertContent(content, slashPosition, textFieldValue)
+                onAction(UiAction.PromptChanged(textFieldValue.text))
+                showInsertPopup = false
+                slashPosition = -1
+                selectedIndex = 0
+            }
+        }
+
+        fun dismissPopup() {
+            showInsertPopup = false
+            slashPosition = -1
+            selectedIndex = 0
+        }
 
         Box(
             modifier = Modifier
@@ -172,8 +198,7 @@ private fun CenterPromptColumn(
                     // Auto-dismiss if slash was removed
                     if (showInsertPopup && slashPosition >= 0) {
                         if (slashPosition >= newValue.text.length || newValue.text[slashPosition] != '/') {
-                            showInsertPopup = false
-                            slashPosition = -1
+                            dismissPopup()
                         }
                     }
 
@@ -189,6 +214,7 @@ private fun CenterPromptColumn(
                             if (isAtStart || precededByWhitespace) {
                                 slashPosition = cursor - 1
                                 showInsertPopup = true
+                                selectedIndex = 0
                             }
                         }
                     }
@@ -196,25 +222,45 @@ private fun CenterPromptColumn(
                     onAction(UiAction.PromptChanged(newValue.text))
                 },
                 label = "// ENTER PROMPT",
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onPreviewKeyEvent { event ->
+                        if (!showInsertPopup || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (event.key) {
+                            Key.Enter -> {
+                                if (insertItems.isNotEmpty()) {
+                                    performInsert(insertItems[selectedIndex].content)
+                                }
+                                true
+                            }
+                            Key.DirectionDown -> {
+                                if (insertItems.isNotEmpty()) {
+                                    selectedIndex = (selectedIndex + 1).mod(insertItems.size)
+                                }
+                                true
+                            }
+                            Key.DirectionUp -> {
+                                if (insertItems.isNotEmpty()) {
+                                    selectedIndex = (selectedIndex - 1).mod(insertItems.size)
+                                }
+                                true
+                            }
+                            Key.Escape -> {
+                                dismissPopup()
+                                true
+                            }
+                            else -> false
+                        }
+                    },
                 minLines = 8,
             )
 
             InsertFromChatPopup(
                 expanded = showInsertPopup,
-                onDismiss = {
-                    showInsertPopup = false
-                    slashPosition = -1
-                },
-                otherChats = otherChats,
-                onInsert = { content ->
-                    if (slashPosition >= 0) {
-                        textFieldValue = insertContent(content, slashPosition, textFieldValue)
-                        onAction(UiAction.PromptChanged(textFieldValue.text))
-                        showInsertPopup = false
-                        slashPosition = -1
-                    }
-                },
+                onDismiss = ::dismissPopup,
+                items = insertItems,
+                selectedIndex = selectedIndex,
+                onInsert = ::performInsert,
             )
         }
 

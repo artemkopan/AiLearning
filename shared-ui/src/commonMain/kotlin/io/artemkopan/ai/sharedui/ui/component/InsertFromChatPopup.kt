@@ -1,6 +1,6 @@
 package io.artemkopan.ai.sharedui.ui.component
 
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.DropdownMenu
@@ -9,16 +9,54 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedui.state.ChatState
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 
+data class InsertItem(
+    val chatTitle: String,
+    val label: String,
+    val preview: String,
+    val content: String,
+    val color: Color,
+)
+
+fun buildInsertItems(otherChats: List<ChatState>): List<InsertItem> = buildList {
+    otherChats.forEach { chat ->
+        if (chat.prompt.isNotBlank()) {
+            add(
+                InsertItem(
+                    chatTitle = chat.title,
+                    label = "PROMPT",
+                    preview = chat.prompt.take(80).replace('\n', ' '),
+                    content = chat.prompt,
+                    color = CyberpunkColors.Yellow,
+                )
+            )
+        }
+        val responseText = chat.response?.text
+        if (!responseText.isNullOrBlank()) {
+            add(
+                InsertItem(
+                    chatTitle = chat.title,
+                    label = "OUTPUT",
+                    preview = responseText.take(80).replace('\n', ' '),
+                    content = responseText,
+                    color = CyberpunkColors.NeonGreen,
+                )
+            )
+        }
+    }
+}
+
 @Composable
 fun InsertFromChatPopup(
     expanded: Boolean,
     onDismiss: () -> Unit,
-    otherChats: List<ChatState>,
+    items: List<InsertItem>,
+    selectedIndex: Int,
     onInsert: (String) -> Unit,
 ) {
     DropdownMenu(
@@ -36,7 +74,7 @@ fun InsertFromChatPopup(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
         )
 
-        if (otherChats.isEmpty()) {
+        if (items.isEmpty()) {
             Text(
                 text = "No other chats available",
                 style = MaterialTheme.typography.bodySmall,
@@ -44,53 +82,27 @@ fun InsertFromChatPopup(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             )
         } else {
-            otherChats.forEach { chat ->
-                Column(modifier = Modifier.padding(horizontal = 4.dp)) {
-                    // Chat title
-                    Text(
-                        text = chat.title,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = CyberpunkColors.Cyan,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-
-                    // Insert Prompt option
-                    if (chat.prompt.isNotBlank()) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = "> INSERT PROMPT  ${chat.prompt.take(80).replace('\n', ' ')}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = CyberpunkColors.Yellow,
-                                    maxLines = 1,
-                                )
-                            },
-                            onClick = {
-                                onInsert(chat.prompt)
-                                onDismiss()
-                            },
+            items.forEachIndexed { index, item ->
+                val isSelected = index == selectedIndex
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "${item.chatTitle} > ${item.label}  ${item.preview}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = item.color,
+                            maxLines = 1,
                         )
-                    }
-
-                    // Insert Output option
-                    val responseText = chat.response?.text
-                    if (!responseText.isNullOrBlank()) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = "> INSERT OUTPUT  ${responseText.take(80).replace('\n', ' ')}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = CyberpunkColors.NeonGreen,
-                                    maxLines = 1,
-                                )
-                            },
-                            onClick = {
-                                onInsert(responseText)
-                                onDismiss()
-                            },
-                        )
-                    }
-                }
+                    },
+                    onClick = {
+                        onInsert(item.content)
+                        onDismiss()
+                    },
+                    modifier = if (isSelected) {
+                        Modifier.background(CyberpunkColors.BorderDark)
+                    } else {
+                        Modifier
+                    },
+                )
             }
         }
     }

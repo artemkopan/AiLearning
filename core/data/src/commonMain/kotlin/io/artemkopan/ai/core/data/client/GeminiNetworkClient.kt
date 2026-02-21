@@ -1,7 +1,7 @@
 package io.artemkopan.ai.core.data.client
 
 import io.artemkopan.ai.core.data.error.DataError
-import io.github.aakira.napier.Napier
+import co.touchlab.kermit.Logger
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException
@@ -20,13 +20,15 @@ class GeminiNetworkClient(
     private val baseUrl: String = "https://generativelanguage.googleapis.com/v1beta",
 ) : LlmNetworkClient {
 
+    private val log = Logger.withTag("GeminiNetworkClient")
+
     override suspend fun generate(request: NetworkGenerateRequest): Result<NetworkGenerateResponse> {
         if (apiKey.isBlank()) {
-            Napier.e(tag = TAG) { "API key is missing" }
+            log.e { "API key is missing" }
             return Result.failure(DataError.AuthenticationError("Missing GEMINI_API_KEY configuration."))
         }
 
-        Napier.d(tag = TAG) { "Starting generation request: model=${request.model}, promptLength=${request.prompt.length}" }
+        log.d { "Starting generation request: model=${request.model}, promptLength=${request.prompt.length}" }
         val startTime = currentTimeMillis()
 
         return runCatching {
@@ -62,13 +64,13 @@ class GeminiNetworkClient(
                 .orEmpty()
 
             if (text.isBlank()) {
-                Napier.w(tag = TAG) { "Provider returned empty response" }
+                log.w { "Provider returned empty response" }
                 throw DataError.EmptyResponseError("Provider returned an empty response.")
             }
 
             val latencyMs = currentTimeMillis() - startTime
             val usage = response.usageMetadata
-            Napier.i(tag = TAG) {
+            log.i {
                 "Generation completed: model=${request.model}, latencyMs=$latencyMs, " +
                     "inputTokens=${usage?.promptTokenCount ?: 0}, outputTokens=${usage?.candidatesTokenCount ?: 0}"
             }
@@ -98,15 +100,11 @@ class GeminiNetworkClient(
                 is ServerResponseException -> DataError.NetworkError("Provider server error: ${throwable.response.status}.", throwable)
                 else -> DataError.NetworkError("Provider call failed.", throwable)
             }
-            Napier.e(tag = TAG, throwable = throwable) {
+            log.e(throwable) {
                 "Generation failed: model=${request.model}, latencyMs=$latencyMs, error=${mappedError.message}"
             }
             throw mappedError
         }
-    }
-
-    private companion object {
-        const val TAG = "GeminiNetworkClient"
     }
 }
 

@@ -6,7 +6,7 @@ import io.artemkopan.ai.sharedcontract.AgentMode
 import io.artemkopan.ai.sharedcontract.ChatConfigDto
 import io.artemkopan.ai.sharedcontract.GenerateRequestDto
 import io.artemkopan.ai.sharedui.gateway.PromptGateway
-import io.github.aakira.napier.Napier
+import co.touchlab.kermit.Logger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -73,6 +73,7 @@ class AppViewModel(
     private val gateway: PromptGateway,
 ) : ViewModel() {
 
+    private val log = Logger.withTag("AppViewModel")
     private val _state = MutableStateFlow(UiState())
     private val generationJobs = mutableMapOf<ChatId, Job>()
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -80,16 +81,16 @@ class AppViewModel(
     private var chatCounter = 0
 
     init {
-        Napier.d(tag = TAG) { "AppViewModel initialized" }
+        log.d { "AppViewModel initialized" }
         handleCreateChat()
         viewModelScope.launch {
             gateway.getConfig()
                 .onSuccess { config ->
-                    Napier.i(tag = TAG) { "Config loaded: ${config.models.size} models, default=${config.defaultModel}" }
+                    log.i { "Config loaded: ${config.models.size} models, default=${config.defaultModel}" }
                     _state.update { it.copy(chatConfig = config) }
                 }
                 .onFailure { throwable ->
-                    Napier.e(tag = TAG, throwable = throwable) { "Failed to load config" }
+                    log.e(throwable) { "Failed to load config" }
                 }
         }
     }
@@ -160,7 +161,7 @@ class AppViewModel(
     }
 
     private fun handleDismissError() {
-        Napier.d(tag = TAG) { "Error dismissed" }
+        log.d { "Error dismissed" }
         _state.update { it.copy(errorPopup = null) }
     }
 
@@ -171,7 +172,7 @@ class AppViewModel(
         val currentPrompt = chat.prompt.trim()
 
         if (currentPrompt.isBlank()) {
-            Napier.w(tag = TAG) { "Submit blocked: prompt is blank" }
+            log.w { "Submit blocked: prompt is blank" }
             _state.update {
                 it.copy(
                     errorPopup = ErrorPopupState(
@@ -186,12 +187,12 @@ class AppViewModel(
         // Cancel previous request for this chat if still running
         generationJobs[activeId]?.let { job ->
             if (job.isActive) {
-                Napier.d(tag = TAG) { "Cancelling previous generation for chat ${activeId.value}" }
+                log.d { "Cancelling previous generation for chat ${activeId.value}" }
                 job.cancel()
             }
         }
 
-        Napier.i(tag = TAG) { "Submitting prompt for chat ${activeId.value}: length=${currentPrompt.length}" }
+        log.i { "Submitting prompt for chat ${activeId.value}: length=${currentPrompt.length}" }
 
         _state.update { state ->
             val updatedChat = state.chats[activeId]?.copy(isLoading = true) ?: return@update state
@@ -222,7 +223,7 @@ class AppViewModel(
                 )
             )
                 .onSuccess { dto ->
-                    Napier.i(tag = TAG) {
+                    log.i {
                         "Generation successful for chat ${capturedId.value}: requestId=${dto.requestId}"
                     }
                     _state.update { state ->
@@ -247,7 +248,7 @@ class AppViewModel(
                     }
                 }
                 .onFailure { throwable ->
-                    Napier.e(tag = TAG, throwable = throwable) {
+                    log.e(throwable) {
                         "Generation failed for chat ${capturedId.value}"
                     }
                     _state.update { state ->
@@ -267,7 +268,7 @@ class AppViewModel(
     private fun handleCreateChat() {
         val currentState = _state.value
         if (currentState.chatOrder.size >= MAX_CHATS) {
-            Napier.w(tag = TAG) { "Cannot create chat: max $MAX_CHATS reached" }
+            log.w { "Cannot create chat: max $MAX_CHATS reached" }
             return
         }
 
@@ -282,7 +283,7 @@ class AppViewModel(
                 activeChatId = newId,
             )
         }
-        Napier.d(tag = TAG) { "Created chat ${newId.value}" }
+        log.d { "Created chat ${newId.value}" }
     }
 
     private fun handleSelectChat(chatId: ChatId) {
@@ -315,19 +316,17 @@ class AppViewModel(
                 activeChatId = newActiveId,
             )
         }
-        Napier.d(tag = TAG) { "Closed chat ${chatId.value}" }
+        log.d { "Closed chat ${chatId.value}" }
     }
 
     override fun onCleared() {
         super.onCleared()
         generationJobs.values.forEach { it.cancel() }
         generationJobs.clear()
-        Napier.d(tag = TAG) { "AppViewModel cleared" }
+        log.d { "AppViewModel cleared" }
     }
 
-    private companion object {
-        const val TAG = "AppViewModel"
-        const val MAX_CHATS = 5
-        const val MAX_TITLE_LENGTH = 20
-    }
 }
+
+private const val MAX_CHATS = 5
+private const val MAX_TITLE_LENGTH = 20
