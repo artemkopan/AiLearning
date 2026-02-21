@@ -92,7 +92,7 @@ private fun ChatItem(
         }
 
         Text(
-            text = chat.title,
+            text = formatChatTitle(chat),
             style = MaterialTheme.typography.bodySmall,
             color = textColor,
             maxLines = 1,
@@ -140,4 +140,9 @@ private fun AddChatButton(
             color = textColor,
         )
     }
+}
+
+private fun formatChatTitle(chat: ChatState): String {
+    val chatNumber = chat.id.value.substringAfter("chat-", "")
+    return if (chatNumber.isNotBlank()) "#$chatNumber: ${chat.title}" else chat.title
 }

@@ -169,7 +169,8 @@ class AppViewModel(
         val currentState = _state.value
         val activeId = currentState.activeChatId ?: return
         val chat = currentState.chats[activeId] ?: return
-        val currentPrompt = chat.prompt.trim()
+        val rawPrompt = chat.prompt.trim()
+        val currentPrompt = resolveReferences(rawPrompt, currentState.chats)
 
         if (currentPrompt.isBlank()) {
             log.w { "Submit blocked: prompt is blank" }
@@ -263,6 +264,55 @@ class AppViewModel(
                     }
                 }
         }
+    }
+
+    private fun resolveReferences(prompt: String, chats: Map<ChatId, ChatState>): String {
+        val resolved = StringBuilder(prompt.length)
+        var cursor = 0
+
+        while (cursor < prompt.length) {
+            val tokenStart = prompt.indexOf("[#", cursor)
+            if (tokenStart < 0) {
+                resolved.append(prompt, cursor, prompt.length)
+                break
+            }
+
+            resolved.append(prompt, cursor, tokenStart)
+
+            val tokenEnd = prompt.indexOf(']', tokenStart + 2)
+            if (tokenEnd < 0) {
+                resolved.append(prompt, tokenStart, prompt.length)
+                break
+            }
+
+            val token = prompt.substring(tokenStart, tokenEnd + 1)
+            val content = prompt.substring(tokenStart + 2, tokenEnd)
+            val separator = content.indexOf(' ')
+            if (separator <= 0 || separator >= content.lastIndex) {
+                resolved.append(token)
+                cursor = tokenEnd + 1
+                continue
+            }
+
+            val chatNumber = content.substring(0, separator)
+            val referenceType = content.substring(separator + 1)
+            if (!chatNumber.all { it.isDigit() } || (referenceType != "prompt" && referenceType != "output")) {
+                resolved.append(token)
+                cursor = tokenEnd + 1
+                continue
+            }
+
+            val chat = chats[ChatId("chat-$chatNumber")]
+            val replacement = when (referenceType) {
+                "prompt" -> chat?.prompt?.takeIf { it.isNotBlank() } ?: token
+                "output" -> chat?.response?.text?.takeIf { it.isNotBlank() } ?: token
+                else -> token
+            }
+            resolved.append(replacement)
+            cursor = tokenEnd + 1
+        }
+
+        return resolved.toString()
     }
 
     private fun handleCreateChat() {

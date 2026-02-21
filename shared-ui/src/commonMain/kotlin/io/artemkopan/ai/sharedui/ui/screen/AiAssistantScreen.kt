@@ -27,8 +27,14 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedcontract.ChatConfigDto
 import io.artemkopan.ai.sharedui.state.AppViewModel
@@ -90,7 +96,7 @@ private fun AiAssistantContent(
                         onChatSelected = { onAction(UiAction.SelectChat(it)) },
                         onChatClosed = { onAction(UiAction.CloseChat(it)) },
                         onNewChatClicked = { onAction(UiAction.CreateChat) },
-                        modifier = Modifier.width(160.dp).fillMaxHeight(),
+                        modifier = Modifier.width(180.dp).fillMaxHeight(),
                     )
 
                     // Center column — prompt + output
@@ -167,6 +173,7 @@ private fun CenterPromptColumn(
         var selectedIndex by remember { mutableIntStateOf(0) }
 
         val insertItems = remember(otherChats) { buildInsertItems(otherChats) }
+        val referenceHighlight = remember { ReferenceHighlightTransformation() }
 
         fun performInsert(content: String) {
             if (slashPosition >= 0) {
@@ -229,7 +236,7 @@ private fun CenterPromptColumn(
                         when (event.key) {
                             Key.Enter -> {
                                 if (insertItems.isNotEmpty()) {
-                                    performInsert(insertItems[selectedIndex].content)
+                                    performInsert(insertItems[selectedIndex].token)
                                 }
                                 true
                             }
@@ -253,6 +260,7 @@ private fun CenterPromptColumn(
                         }
                     },
                 minLines = 8,
+                visualTransformation = referenceHighlight,
             )
 
             InsertFromChatPopup(
@@ -279,6 +287,23 @@ private fun CenterPromptColumn(
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
         }
+    }
+}
+
+private class ReferenceHighlightTransformation : VisualTransformation {
+    private val tokenRegex = Regex("""\[#\d+ (?:prompt|output)\]""")
+
+    override fun filter(text: AnnotatedString): TransformedText {
+        val builder = AnnotatedString.Builder(text)
+        tokenRegex.findAll(text.text).forEach { match ->
+            val color = if ("prompt" in match.value) CyberpunkColors.Yellow else CyberpunkColors.NeonGreen
+            builder.addStyle(
+                SpanStyle(color = color, fontWeight = FontWeight.Bold),
+                match.range.first,
+                match.range.last + 1,
+            )
+        }
+        return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
     }
 }
 

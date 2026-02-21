@@ -20,18 +20,22 @@ data class InsertItem(
     val label: String,
     val preview: String,
     val content: String,
+    val token: String,
     val color: Color,
 )
 
 fun buildInsertItems(otherChats: List<ChatState>): List<InsertItem> = buildList {
     otherChats.forEach { chat ->
+        val chatNumber = chat.id.value.substringAfter("chat-")
+        val displayTitle = if (chatNumber.isNotBlank()) "#$chatNumber: ${chat.title}" else chat.title
         if (chat.prompt.isNotBlank()) {
             add(
                 InsertItem(
-                    chatTitle = chat.title,
+                    chatTitle = displayTitle,
                     label = "PROMPT",
                     preview = chat.prompt.take(80).replace('\n', ' '),
                     content = chat.prompt,
+                    token = "[#$chatNumber prompt]",
                     color = CyberpunkColors.Yellow,
                 )
             )
@@ -40,10 +44,11 @@ fun buildInsertItems(otherChats: List<ChatState>): List<InsertItem> = buildList 
         if (!responseText.isNullOrBlank()) {
             add(
                 InsertItem(
-                    chatTitle = chat.title,
+                    chatTitle = displayTitle,
                     label = "OUTPUT",
                     preview = responseText.take(80).replace('\n', ' '),
                     content = responseText,
+                    token = "[#$chatNumber output]",
                     color = CyberpunkColors.NeonGreen,
                 )
             )
@@ -94,7 +99,7 @@ fun InsertFromChatPopup(
                         )
                     },
                     onClick = {
-                        onInsert(item.content)
+                        onInsert(item.token)
                         onDismiss()
                     },
                     modifier = if (isSelected) {

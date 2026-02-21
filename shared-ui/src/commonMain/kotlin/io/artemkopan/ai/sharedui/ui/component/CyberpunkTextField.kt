@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 
@@ -74,6 +75,7 @@ fun CyberpunkTextField(
     singleLine: Boolean = false,
     minLines: Int = 1,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     OutlinedTextField(
         value = value,
@@ -96,6 +98,7 @@ fun CyberpunkTextField(
         singleLine = singleLine,
         minLines = minLines,
         keyboardOptions = keyboardOptions,
+        visualTransformation = visualTransformation,
         colors = cyberpunkTextFieldColors(),
         shape = RoundedCornerShape(2.dp),
     )
