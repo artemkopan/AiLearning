@@ -6,6 +6,7 @@ import io.artemkopan.ai.sharedui.gateway.HttpTerminalGateway
 import io.artemkopan.ai.sharedui.gateway.TerminalGateway
 import io.artemkopan.ai.sharedui.gateway.createPlatformHttpClient
 import io.artemkopan.ai.sharedui.state.AppViewModel
+import io.artemkopan.ai.sharedui.usecase.CloseChatUseCase
 import io.artemkopan.ai.sharedui.usecase.CreateChatUseCase
 import io.artemkopan.ai.sharedui.usecase.LoadChatsUseCase
 import io.artemkopan.ai.sharedui.usecase.LoadProjectsUseCase
@@ -19,7 +20,8 @@ val sharedModule = module {
     single { EventsClient(get()) }
     factory { LoadProjectsUseCase(get()) }
     factory { CreateChatUseCase(get()) }
+    factory { CloseChatUseCase(get()) }
     factory { LoadChatsUseCase(get()) }
     factory { ObserveStatusEventsUseCase(get()) }
-    viewModel { AppViewModel(get(), get(), get(), get()) }
+    viewModel { AppViewModel(get(), get(), get(), get(), get()) }
 }

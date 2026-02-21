@@ -20,6 +20,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.log
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
@@ -75,6 +76,17 @@ fun Application.configureRoutes() {
             get("/chats") {
                 val chats = chatManager.listChats()
                 call.respond(chats)
+            }
+
+            delete("/chats/{chatId}") {
+                val chatId = call.parameters["chatId"]
+                if (chatId == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponseDto("missing_id", "Missing chatId"))
+                    return@delete
+                }
+                chatManager.closeChat(chatId)
+                logger.info("Chat $chatId closed")
+                call.respond(HttpStatusCode.OK, mapOf("ok" to true))
             }
 
             post("/status") {

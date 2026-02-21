@@ -7,6 +7,7 @@ import io.artemkopan.ai.sharedcontract.ChatInfo
 import io.artemkopan.ai.sharedcontract.ChatStatus
 import io.artemkopan.ai.sharedcontract.ProjectInfo
 import io.artemkopan.ai.sharedui.gateway.WsEvent
+import io.artemkopan.ai.sharedui.usecase.CloseChatUseCase
 import io.artemkopan.ai.sharedui.usecase.CreateChatUseCase
 import io.artemkopan.ai.sharedui.usecase.LoadChatsUseCase
 import io.artemkopan.ai.sharedui.usecase.LoadProjectsUseCase
@@ -48,6 +49,7 @@ sealed interface UiAction {
 class AppViewModel(
     private val loadProjects: LoadProjectsUseCase,
     private val createChat: CreateChatUseCase,
+    private val closeChat: CloseChatUseCase,
     private val loadChats: LoadChatsUseCase,
     private val observeStatusEvents: ObserveStatusEventsUseCase,
 ) : ViewModel() {
@@ -179,6 +181,21 @@ class AppViewModel(
     }
 
     private fun handleCloseChat(chatId: String) {
+        viewModelScope.launch {
+            closeChat(chatId)
+                .onSuccess {
+                    log.i { "Closed chat $chatId" }
+                    removeChatFromState(chatId)
+                }
+                .onFailure { e ->
+                    log.e(e) { "Failed to close chat $chatId" }
+                    // Remove from UI anyway so user isn't stuck
+                    removeChatFromState(chatId)
+                }
+        }
+    }
+
+    private fun removeChatFromState(chatId: String) {
         _state.update { state ->
             val newChats = state.chats.filter { it.chatId != chatId }
             val newActiveId = if (state.activeChatId == chatId) {

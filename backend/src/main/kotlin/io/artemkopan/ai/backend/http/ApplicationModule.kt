@@ -44,8 +44,9 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
     }
 
     install(CORS) {
-        allowMethod(HttpMethod.Post)
         allowMethod(HttpMethod.Get)
+        allowMethod(HttpMethod.Post)
+        allowMethod(HttpMethod.Delete)
         allowHeader(HttpHeaders.ContentType)
         allowHost(config.corsOrigin, schemes = listOf("http", "https"))
     }
