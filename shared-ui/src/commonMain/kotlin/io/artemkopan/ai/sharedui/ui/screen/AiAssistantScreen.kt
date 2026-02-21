@@ -1,6 +1,7 @@
 package io.artemkopan.ai.sharedui.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -16,7 +17,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedcontract.ChatConfigDto
 import io.artemkopan.ai.sharedui.state.AppViewModel
@@ -28,6 +34,7 @@ import io.artemkopan.ai.sharedui.ui.component.ChatSidePanel
 import io.artemkopan.ai.sharedui.ui.component.ConfigPanel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkTextField
 import io.artemkopan.ai.sharedui.ui.component.ErrorDialog
+import io.artemkopan.ai.sharedui.ui.component.InsertFromChatPopup
 import io.artemkopan.ai.sharedui.ui.component.OutputPanel
 import io.artemkopan.ai.sharedui.ui.component.StatusPanel
 import io.artemkopan.ai.sharedui.ui.component.SubmitButton
@@ -83,6 +90,7 @@ private fun AiAssistantContent(
                     if (activeChat != null) {
                         CenterPromptColumn(
                             chat = activeChat,
+                            otherChats = orderedChats.filter { it.id != activeChat.id },
                             onAction = onAction,
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                         )
@@ -129,6 +137,7 @@ private fun ScreenHeader() {
 @Composable
 private fun CenterPromptColumn(
     chat: ChatState,
+    otherChats: List<ChatState>,
     onAction: (UiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -138,15 +147,76 @@ private fun CenterPromptColumn(
     ) {
         val hasResponse = chat.response != null
 
-        CyberpunkTextField(
-            value = chat.prompt,
-            onValueChange = { onAction(UiAction.PromptChanged(it)) },
-            label = "// ENTER PROMPT",
+        var textFieldValue by remember(chat.id) {
+            mutableStateOf(TextFieldValue(text = chat.prompt, selection = TextRange(chat.prompt.length)))
+        }
+        // Sync external changes (e.g. tab switch populating prompt from ViewModel)
+        if (textFieldValue.text != chat.prompt) {
+            textFieldValue = TextFieldValue(text = chat.prompt, selection = TextRange(chat.prompt.length))
+        }
+
+        var showInsertPopup by remember { mutableStateOf(false) }
+        var slashPosition by remember { mutableStateOf(-1) }
+
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (hasResponse) Modifier.heightIn(max = 200.dp) else Modifier.weight(1f)),
-            minLines = 8,
-        )
+        ) {
+            CyberpunkTextField(
+                value = textFieldValue,
+                onValueChange = { newValue ->
+                    val oldText = textFieldValue.text
+                    textFieldValue = newValue
+
+                    // Auto-dismiss if slash was removed
+                    if (showInsertPopup && slashPosition >= 0) {
+                        if (slashPosition >= newValue.text.length || newValue.text[slashPosition] != '/') {
+                            showInsertPopup = false
+                            slashPosition = -1
+                        }
+                    }
+
+                    // Detect `/` trigger: text grew by 1, char at cursor-1 is `/`,
+                    // preceded by whitespace/newline or at start of text
+                    if (!showInsertPopup && newValue.text.length == oldText.length + 1) {
+                        val cursor = newValue.selection.start
+                        if (cursor > 0 && newValue.text[cursor - 1] == '/') {
+                            val isAtStart = cursor == 1
+                            val precededByWhitespace = cursor >= 2 && newValue.text[cursor - 2].let {
+                                it == ' ' || it == '\n' || it == '\r' || it == '\t'
+                            }
+                            if (isAtStart || precededByWhitespace) {
+                                slashPosition = cursor - 1
+                                showInsertPopup = true
+                            }
+                        }
+                    }
+
+                    onAction(UiAction.PromptChanged(newValue.text))
+                },
+                label = "// ENTER PROMPT",
+                modifier = Modifier.fillMaxSize(),
+                minLines = 8,
+            )
+
+            InsertFromChatPopup(
+                expanded = showInsertPopup,
+                onDismiss = {
+                    showInsertPopup = false
+                    slashPosition = -1
+                },
+                otherChats = otherChats,
+                onInsert = { content ->
+                    if (slashPosition >= 0) {
+                        textFieldValue = insertContent(content, slashPosition, textFieldValue)
+                        onAction(UiAction.PromptChanged(textFieldValue.text))
+                        showInsertPopup = false
+                        slashPosition = -1
+                    }
+                },
+            )
+        }
 
         SubmitButton(
             isLoading = chat.isLoading,
@@ -164,6 +234,14 @@ private fun CenterPromptColumn(
             )
         }
     }
+}
+
+private fun insertContent(content: String, slashPos: Int, current: TextFieldValue): TextFieldValue {
+    val text = current.text
+    val before = text.substring(0, slashPos)
+    val after = text.substring(slashPos + 1)
+    val newText = before + content + after
+    return TextFieldValue(text = newText, selection = TextRange(before.length + content.length))
 }
 
 @Composable

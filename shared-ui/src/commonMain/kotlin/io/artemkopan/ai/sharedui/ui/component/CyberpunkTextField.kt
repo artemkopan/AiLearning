@@ -8,6 +8,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 
@@ -30,6 +31,43 @@ fun cyberpunkTextFieldColors() = OutlinedTextFieldDefaults.colors(
 fun CyberpunkTextField(
     value: String,
     onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null,
+    singleLine: Boolean = false,
+    minLines: Int = 1,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        },
+        placeholder = placeholder?.let {
+            {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        modifier = modifier,
+        singleLine = singleLine,
+        minLines = minLines,
+        keyboardOptions = keyboardOptions,
+        colors = cyberpunkTextFieldColors(),
+        shape = RoundedCornerShape(2.dp),
+    )
+}
+
+@Composable
+fun CyberpunkTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
     label: String,
     modifier: Modifier = Modifier,
     placeholder: String? = null,
