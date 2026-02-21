@@ -35,3 +35,19 @@ data class ErrorResponseDto(
     val message: String,
     val requestId: String,
 )
+
+@Serializable
+data class ModelOptionDto(
+    val id: String,
+    val name: String,
+    val provider: String,
+)
+
+@Serializable
+data class ChatConfigDto(
+    val models: List<ModelOptionDto>,
+    val defaultModel: String,
+    val temperatureMin: Double,
+    val temperatureMax: Double,
+    val defaultTemperature: Double,
+)

@@ -3,6 +3,7 @@ package io.artemkopan.ai.sharedui.state
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.artemkopan.ai.sharedcontract.AgentMode
+import io.artemkopan.ai.sharedcontract.ChatConfigDto
 import io.artemkopan.ai.sharedcontract.GenerateRequestDto
 import io.artemkopan.ai.sharedui.gateway.PromptGateway
 import io.github.aakira.napier.Napier
@@ -51,6 +52,7 @@ data class UiState(
     val chatOrder: List<ChatId> = emptyList(),
     val activeChatId: ChatId? = null,
     val errorPopup: ErrorPopupState? = null,
+    val chatConfig: ChatConfigDto? = null,
 )
 
 sealed interface UiAction {
@@ -80,6 +82,16 @@ class AppViewModel(
     init {
         Napier.d(tag = TAG) { "AppViewModel initialized" }
         handleCreateChat()
+        viewModelScope.launch {
+            gateway.getConfig()
+                .onSuccess { config ->
+                    Napier.i(tag = TAG) { "Config loaded: ${config.models.size} models, default=${config.defaultModel}" }
+                    _state.update { it.copy(chatConfig = config) }
+                }
+                .onFailure { throwable ->
+                    Napier.e(tag = TAG, throwable = throwable) { "Failed to load config" }
+                }
+        }
     }
 
     fun onAction(action: UiAction) {

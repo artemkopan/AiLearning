@@ -1,5 +1,6 @@
 package io.artemkopan.ai.webapp.ui
 
+import io.artemkopan.ai.sharedcontract.ChatConfigDto
 import io.artemkopan.ai.sharedcontract.ErrorResponseDto
 import io.artemkopan.ai.sharedcontract.GenerateRequestDto
 import io.artemkopan.ai.sharedcontract.GenerateResponseDto
@@ -17,6 +18,22 @@ class HttpPromptGateway(
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
+    }
+
+    override suspend fun getConfig(): Result<ChatConfigDto> {
+        Napier.d(tag = TAG) { "Fetching chat config" }
+        return runCatching {
+            val response = window.fetch("$backendBaseUrl/api/v1/config").await()
+            val bodyText = response.text().await()
+
+            if (!response.ok) {
+                throw RuntimeException("Failed to fetch config: ${response.status}")
+            }
+
+            json.decodeFromString(ChatConfigDto.serializer(), bodyText)
+        }.onFailure { throwable ->
+            Napier.e(tag = TAG, throwable = throwable) { "Failed to fetch config" }
+        }
     }
 
     override suspend fun generate(request: GenerateRequestDto): Result<GenerateResponseDto> {

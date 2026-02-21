@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.artemkopan.ai.sharedcontract.ChatConfigDto
 import io.artemkopan.ai.sharedui.state.AppViewModel
 import io.artemkopan.ai.sharedui.state.ChatState
 import io.artemkopan.ai.sharedui.state.UiAction
@@ -91,6 +92,7 @@ private fun AiAssistantContent(
                     if (activeChat != null) {
                         SettingsColumn(
                             chat = activeChat,
+                            chatConfig = state.chatConfig,
                             onAction = onAction,
                             modifier = Modifier.width(220.dp).fillMaxHeight(),
                         )
@@ -167,6 +169,7 @@ private fun CenterPromptColumn(
 @Composable
 private fun SettingsColumn(
     chat: ChatState,
+    chatConfig: ChatConfigDto?,
     onAction: (UiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -189,6 +192,10 @@ private fun SettingsColumn(
             onTemperatureChanged = { onAction(UiAction.TemperatureChanged(it)) },
             stopSequences = chat.stopSequences,
             onStopSequencesChanged = { onAction(UiAction.StopSequencesChanged(it)) },
+            models = chatConfig?.models.orEmpty(),
+            temperaturePlaceholder = chatConfig?.let {
+                "${it.temperatureMin} – ${it.temperatureMax}"
+            } ?: "0.0 – 2.0",
             modifier = Modifier.fillMaxWidth(),
         )
     }

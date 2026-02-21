@@ -6,9 +6,11 @@ import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
 import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
+import io.artemkopan.ai.sharedcontract.ChatConfigDto
 import io.artemkopan.ai.sharedcontract.ErrorResponseDto
 import io.artemkopan.ai.sharedcontract.GenerateRequestDto
 import io.artemkopan.ai.sharedcontract.GenerateResponseDto
+import io.artemkopan.ai.sharedcontract.ModelOptionDto
 import io.artemkopan.ai.sharedcontract.TokenUsageDto
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
@@ -96,6 +98,24 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         get("/health") {
             logger.info("GET /health")
             call.respond(mapOf("status" to "ok"))
+        }
+
+        get("/api/v1/config") {
+            call.respond(
+                HttpStatusCode.OK,
+                ChatConfigDto(
+                    models = listOf(
+                        ModelOptionDto(id = "gemini-3-flash-preview", name = "Gemini 3 Flash Preview", provider = "gemini"),
+                        ModelOptionDto(id = "gemini-2.5-flash", name = "Gemini 2.5 Flash", provider = "gemini"),
+                        ModelOptionDto(id = "gemini-2.5-flash-lite", name = "Gemini 2.5 Flash Lite", provider = "gemini"),
+                        ModelOptionDto(id = "gemini-flash-latest", name = "Gemini Flash Latest", provider = "gemini"),
+                    ),
+                    defaultModel = config.defaultModel,
+                    temperatureMin = 0.0,
+                    temperatureMax = 2.0,
+                    defaultTemperature = 0.7,
+                )
+            )
         }
 
         post("/api/v1/generate") {
