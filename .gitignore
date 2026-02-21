@@ -24,3 +24,6 @@ out/
 
 # Generated wrappers/cache
 **/.gradle/
+
+# Docker backend local state
+docker/backend/.gradle/

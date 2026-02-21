@@ -4,6 +4,7 @@ import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.backend.terminal.ChatManager
 import io.artemkopan.ai.backend.terminal.EventBus
 import io.artemkopan.ai.backend.terminal.PtyBridge
+import io.artemkopan.ai.backend.terminal.Shell
 import io.artemkopan.ai.backend.terminal.StatusManager
 import io.artemkopan.ai.sharedcontract.ChatCreatedEvent
 import io.artemkopan.ai.sharedcontract.ChatInfo
@@ -16,9 +17,13 @@ import io.artemkopan.ai.sharedcontract.StatusUpdateRequest
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.PartData
+import io.ktor.http.content.forEachPart
+import io.ktor.utils.io.toByteArray
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
 import io.ktor.server.request.receive
+import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
@@ -36,6 +41,7 @@ fun Application.configureRoutes() {
     val statusManager by inject<StatusManager>()
     val eventBus by inject<EventBus>()
     val ptyBridge by inject<PtyBridge>()
+    val shell by inject<Shell>()
     val config by inject<AppConfig>()
     val logger = log
     val json = Json { explicitNulls = false }
@@ -96,6 +102,37 @@ fun Application.configureRoutes() {
                 logger.info("Status updated for chat ${request.chatId}: ${request.status}")
                 call.respond(HttpStatusCode.OK, mapOf("ok" to true))
             }
+
+            post("/chats/{chatId}/upload") {
+                val chatId = call.parameters["chatId"]
+                if (chatId == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponseDto("missing_id", "Missing chatId"))
+                    return@post
+                }
+                val cwdResult = shell.exec("tmux", "display-message", "-p", "-t", chatId, "#{pane_current_path}")
+                val cwd = cwdResult.stdout.trim()
+                if (cwdResult.exitCode != 0 || cwd.isEmpty()) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponseDto("cwd_error", "Cannot resolve working directory"))
+                    return@post
+                }
+                val multipart = call.receiveMultipart()
+                var savedPath: String? = null
+                multipart.forEachPart { part ->
+                    if (part is PartData.FileItem) {
+                        val fileName = part.originalFileName ?: "upload"
+                        val dest = File(cwd, fileName)
+                        dest.writeBytes(part.provider().toByteArray())
+                        savedPath = dest.absolutePath
+                    }
+                    part.dispose()
+                }
+                if (savedPath == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponseDto("no_file", "No file in request"))
+                    return@post
+                }
+                logger.info("File uploaded to $savedPath for chat $chatId")
+                call.respond(HttpStatusCode.OK, FileUploadResponse(path = savedPath!!))
+            }
         }
 
         webSocket("/ws/{chatId}") {
@@ -119,3 +156,6 @@ fun Application.configureRoutes() {
         }
     }
 }
+
+@kotlinx.serialization.Serializable
+private data class FileUploadResponse(val path: String)

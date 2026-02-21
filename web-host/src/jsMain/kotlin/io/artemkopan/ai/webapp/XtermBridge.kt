@@ -100,6 +100,67 @@ class XtermBridge(private val backendUrl: String) {
             currentFitAddon?.fit()
             sendResize()
         }
+
+        // Drag-and-drop file upload
+        setupDragAndDrop(container, chatId, ws)
+    }
+
+    private fun setupDragAndDrop(container: dynamic, chatId: String, ws: WebSocket) {
+        container.addEventListener("dragover") { event: dynamic ->
+            event.preventDefault()
+            event.dataTransfer.dropEffect = "copy"
+            container.style.outline = "2px solid #F9F002"
+        }
+
+        container.addEventListener("dragleave") { _: dynamic ->
+            container.style.outline = ""
+        }
+
+        container.addEventListener("drop") { event: dynamic ->
+            event.preventDefault()
+            container.style.outline = ""
+
+            val files = event.dataTransfer.files
+            val len = files.length as Int
+            for (i in 0 until len) {
+                val file = files[i]
+                uploadFile(file, chatId, ws)
+            }
+        }
+    }
+
+    private fun uploadFile(file: dynamic, chatId: String, ws: WebSocket) {
+        val fileName = file.name as String
+        log.i { "Uploading file: $fileName for chat: $chatId" }
+
+        val formData = js("new FormData()")
+        formData.append("file", file)
+
+        val fetchOptions = js("{}")
+        fetchOptions.method = "POST"
+        fetchOptions.body = formData
+
+        js("fetch")(
+            "$backendUrl/api/chats/$chatId/upload",
+            fetchOptions
+        ).then { response: dynamic ->
+            if (response.ok) {
+                response.json()
+            } else {
+                log.e { "Upload failed: ${response.status}" }
+                null
+            }
+        }.then { json: dynamic ->
+            if (json != null) {
+                val path = json.path as String
+                log.i { "File uploaded: $path" }
+                if (ws.readyState == WebSocket.OPEN) {
+                    ws.send("$path ")
+                }
+            }
+        }.catch { error: dynamic ->
+            log.e { "Upload error: $error" }
+        }
     }
 
     private fun detach() {
