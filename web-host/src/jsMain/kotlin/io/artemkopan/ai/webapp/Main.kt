@@ -6,6 +6,7 @@ import co.touchlab.kermit.Logger
 import io.artemkopan.ai.sharedui.di.sharedModule
 import io.artemkopan.ai.sharedui.gateway.resolveBackendBaseUrl
 import io.artemkopan.ai.sharedui.state.AppViewModel
+import io.artemkopan.ai.sharedui.state.ProjectSelectorViewModel
 import io.artemkopan.ai.sharedui.ui.screen.TerminalScreen
 import kotlinx.browser.window
 import org.koin.compose.KoinApplication
@@ -55,8 +56,10 @@ private fun startApp() {
             modules(sharedModule)
         }) {
             val viewModel = koinViewModel<AppViewModel>()
+            val projectSelectorViewModel = koinViewModel<ProjectSelectorViewModel>()
             TerminalScreen(
                 viewModel = viewModel,
+                projectSelectorViewModel = projectSelectorViewModel,
                 onActiveChatChanged = { chatId -> xtermBridge.switchChat(chatId) },
             )
         }

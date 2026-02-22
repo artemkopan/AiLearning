@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       target: backend-runtime
+      secrets:
+        - host_gradle_properties
     env_file:
       - .env
     environment:
@@ -12,17 +14,37 @@ services:
       PORT: ${PORT:-8080}
       PROJECTS_ROOT: /docker/shared
       HOOKS_DIR: /docker/shared/ai-learning/scripts
+      BACKEND_HOST_PORT: ${BACKEND_HOST_PORT:-18080}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL:-}
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    working_dir: /docker/shared/ai-learning
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        set -euo pipefail
+        /opt/app/backend/bin/backend &
+        BACKEND_PID=$$!
+        ./gradlew :web-host:jsBrowserDevelopmentRun --no-daemon &
+        WEB_PID=$$!
+        trap 'kill $${BACKEND_PID} $${WEB_PID} 2>/dev/null || true' SIGINT SIGTERM EXIT
+        wait -n $${BACKEND_PID} $${WEB_PID}
+        STATUS=$$?
+        kill $${BACKEND_PID} $${WEB_PID} 2>/dev/null || true
+        wait $${BACKEND_PID} $${WEB_PID} 2>/dev/null || true
+        exit $${STATUS}
     expose:
       - "8080"
+      - "8081"
     ports:
       - "${BACKEND_HOST_PORT:-18080}:8080"
+      - "${WEB_HOST_PORT:-18081}:8081"
     networks:
       - ai-learning-bridge
     volumes:
       - "${HOME}/projects:/docker/shared"
       - "./docker/backend:/docker/backend"
-      - "./docker/backend/.gradle:/home/developer/.gradle"
-      - "${HOME}/.gradle/gradle.properties:/home/developer/.gradle/gradle.properties:ro"
       - "./docker/backend/.m2:/home/developer/.m2"
       - "./docker/backend/.android:/home/developer/.android"
       - "./docker/backend/android-sdk:/opt/android-sdk"
@@ -31,43 +53,10 @@ services:
       - "./docker/backend/.claude:/home/developer/.claude"
       - "./docker/backend/.claude/.claude.json:/home/developer/.claude.json"
 
-  web-host:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-      target: dev-toolbox
-    env_file:
-      - .env
-    depends_on:
-      - backend
-    working_dir: /docker/shared/ai-learning
-    command: ["/bin/bash", "-lc", "./gradlew :web-host:jsBrowserDevelopmentRun --no-daemon"]
-    environment:
-      PORT: 8081
-      BACKEND_HOST_PORT: ${BACKEND_HOST_PORT:-18080}
-      BACKEND_BASE_URL: ${BACKEND_BASE_URL:-}
-      CHOKIDAR_USEPOLLING: "true"
-      WATCHPACK_POLLING: "true"
-      HTTP_PROXY: ""
-      HTTPS_PROXY: ""
-      ALL_PROXY: ""
-      NO_PROXY: "localhost,127.0.0.1"
-    expose:
-      - "8081"
-    ports:
-      - "${WEB_HOST_PORT:-18081}:8081"
-    networks:
-      - ai-learning-bridge
-    volumes:
-      - "${HOME}/projects:/docker/shared"
-      - "./docker/backend:/docker/backend"
-      - "./docker/backend/.gradle:/home/developer/.gradle"
-      - "${HOME}/.gradle/gradle.properties:/home/developer/.gradle/gradle.properties:ro"
-      - "./docker/backend/.m2:/home/developer/.m2"
-      - "./docker/backend/.android:/home/developer/.android"
-      - "./docker/backend/android-sdk:/opt/android-sdk"
-      - "./docker/backend/.kotlin:/home/developer/.kotlin"
-
 networks:
   ai-learning-bridge:
     driver: bridge
+
+secrets:
+  host_gradle_properties:
+    file: ${HOME}/.gradle/gradle.properties

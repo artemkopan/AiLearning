@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 data class ChatStatusEntry(
     val chatId: String,
     val status: ChatStatus,
+    val projectPath: String? = null,
     val eventId: String? = null,
     val title: String? = null,
     val exitCode: Int? = null,
@@ -18,15 +19,17 @@ data class ChatStatusEntry(
 class StatusManager {
     private val statuses = ConcurrentHashMap<String, ChatStatusEntry>()
 
-    fun initStatus(chatId: String) {
-        statuses[chatId] = ChatStatusEntry(chatId = chatId, status = ChatStatus.idle)
+    fun initStatus(chatId: String, projectPath: String? = null) {
+        statuses[chatId] = ChatStatusEntry(chatId = chatId, status = ChatStatus.idle, projectPath = projectPath)
     }
 
     fun applyUpdate(request: StatusUpdateRequest): StatusEvent {
         val now = Instant.now().toString()
+        val existing = statuses[request.chatId]
         val entry = ChatStatusEntry(
             chatId = request.chatId,
             status = request.status,
+            projectPath = existing?.projectPath,
             eventId = request.eventId,
             title = request.title,
             exitCode = request.exitCode,

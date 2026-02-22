@@ -27,13 +27,14 @@ cp .env.example .env
 # then set GEMINI_API_KEY in .env
 ```
 
-## Run backend (Docker)
+## Run backend + web-host (Docker, single container)
 
 ```bash
 docker compose --env-file .env up --build backend
 ```
 
-Backend will be available on `http://localhost:8080`.
+Backend API will be available on `http://localhost:18080`.
+Web app will be available on `http://localhost:18081`.
 
 ## Run web app (local)
 

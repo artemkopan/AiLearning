@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedui.state.AppViewModel
+import io.artemkopan.ai.sharedui.state.ProjectSelectorViewModel
 import io.artemkopan.ai.sharedui.state.UiAction
 import io.artemkopan.ai.sharedui.ui.component.ChatSidePanel
 import io.artemkopan.ai.sharedui.ui.component.ErrorDialog
@@ -30,6 +31,7 @@ import io.artemkopan.ai.sharedui.ui.theme.CyberpunkTheme
 @Composable
 fun TerminalScreen(
     viewModel: AppViewModel,
+    projectSelectorViewModel: ProjectSelectorViewModel,
     onActiveChatChanged: (String?) -> Unit,
 ) {
     val uiState by viewModel.state.collectAsState()
@@ -55,7 +57,7 @@ fun TerminalScreen(
                     ScreenHeader()
 
                     ProjectSelector(
-                        projects = uiState.projects,
+                        viewModel = projectSelectorViewModel,
                         onNewSession = {
                             viewModel.onAction(UiAction.CreateChat())
                         },

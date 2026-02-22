@@ -246,7 +246,13 @@ USER root
 WORKDIR /opt/app
 
 COPY --from=backend-builder /app/backend/build/install/backend ./backend
-RUN chown -R "${APP_USER}:${APP_USER}" /opt/app
+RUN --mount=type=secret,id=host_gradle_properties,required=false \
+    mkdir -p "${APP_HOME}/.gradle" \
+    && if [ -f /run/secrets/host_gradle_properties ]; then \
+         cp /run/secrets/host_gradle_properties "${APP_HOME}/.gradle/gradle.properties"; \
+         chmod 600 "${APP_HOME}/.gradle/gradle.properties"; \
+       fi \
+    && chown -R "${APP_USER}:${APP_USER}" /opt/app "${APP_HOME}/.gradle"
 
 ENV PORT=8080
 EXPOSE 8080

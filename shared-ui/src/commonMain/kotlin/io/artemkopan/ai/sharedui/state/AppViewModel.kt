@@ -5,12 +5,10 @@ import androidx.lifecycle.viewModelScope
 import co.touchlab.kermit.Logger
 import io.artemkopan.ai.sharedcontract.ChatInfo
 import io.artemkopan.ai.sharedcontract.ChatStatus
-import io.artemkopan.ai.sharedcontract.ProjectInfo
 import io.artemkopan.ai.sharedui.gateway.WsEvent
 import io.artemkopan.ai.sharedui.usecase.CloseChatUseCase
 import io.artemkopan.ai.sharedui.usecase.CreateChatUseCase
 import io.artemkopan.ai.sharedui.usecase.LoadChatsUseCase
-import io.artemkopan.ai.sharedui.usecase.LoadProjectsUseCase
 import io.artemkopan.ai.sharedui.usecase.ObserveStatusEventsUseCase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +30,6 @@ data class ErrorPopupState(
 )
 
 data class UiState(
-    val projects: List<ProjectInfo> = emptyList(),
     val chats: List<ChatTab> = emptyList(),
     val activeChatId: String? = null,
     val error: ErrorPopupState? = null,
@@ -47,7 +44,6 @@ sealed interface UiAction {
 }
 
 class AppViewModel(
-    private val loadProjects: LoadProjectsUseCase,
     private val createChat: CreateChatUseCase,
     private val closeChat: CloseChatUseCase,
     private val loadChats: LoadChatsUseCase,
@@ -75,16 +71,6 @@ class AppViewModel(
     }
 
     private fun loadInitialData() {
-        viewModelScope.launch {
-            loadProjects()
-                .onSuccess { projects ->
-                    log.i { "Loaded ${projects.size} projects" }
-                    _state.update { it.copy(projects = projects) }
-                }
-                .onFailure { e ->
-                    log.e(e) { "Failed to load projects" }
-                }
-        }
         viewModelScope.launch {
             loadChats()
                 .onSuccess { chats ->

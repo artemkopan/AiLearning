@@ -25,7 +25,11 @@ class ChatManager(
             throw RuntimeException("Failed to create tmux session: ${result.stderr}")
         }
 
-        statusManager.initStatus(chatId)
+        // Enable mouse support and let xterm.js handle scrollback natively
+        shell.exec("tmux", "set-option", "-t", chatId, "mouse", "on")
+        shell.exec("tmux", "set-option", "-t", chatId, "terminal-overrides", "xterm*:smcup@:rmcup@")
+
+        statusManager.initStatus(chatId, projectPath)
         log.i { "Chat $chatId created successfully" }
         return chatId
     }
@@ -43,7 +47,7 @@ class ChatManager(
                 val status = statusManager.getStatus(sessionName)
                 ChatInfo(
                     chatId = sessionName,
-                    projectPath = status?.title ?: config.projectsRoot,
+                    projectPath = status?.projectPath ?: config.projectsRoot,
                     status = status?.status ?: io.artemkopan.ai.sharedcontract.ChatStatus.idle,
                     since = status?.since ?: "",
                 )

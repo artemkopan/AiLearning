@@ -78,6 +78,14 @@ class XtermBridge(private val backendUrl: String) {
             }
         }
 
+        // Copy selection to clipboard automatically
+        terminal.onSelectionChange {
+            val selection = terminal.getSelection() as? String
+            if (!selection.isNullOrEmpty()) {
+                window.navigator.clipboard.writeText(selection)
+            }
+        }
+
         // Handle browser resize
         window.onresize = {
             currentFitAddon?.fit()
@@ -111,9 +119,15 @@ class XtermBridge(private val backendUrl: String) {
             }
         }
 
-        ws.onclose = {
-            log.d { "WebSocket closed for chat: $chatId" }
-            if (!intentionalClose && currentChatId == chatId) {
+        ws.onclose = { event: dynamic ->
+            val code = event?.code as? Int ?: -1
+            val reason = event?.reason as? String ?: ""
+            log.d { "WebSocket closed for chat: $chatId (code=$code reason=$reason)" }
+
+            // Backend uses CANNOT_ACCEPT when chat session no longer exists.
+            // Treat it as permanent to avoid infinite reconnect loops.
+            val permanentClose = code == 1003 || reason.contains("does not exist", ignoreCase = true)
+            if (!permanentClose && !intentionalClose && currentChatId == chatId) {
                 scheduleReconnect(chatId)
             }
         }
