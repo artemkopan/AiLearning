@@ -10,7 +10,7 @@ data class ProjectInfo(
 
 @Serializable
 data class CreateChatRequest(
-    val projectPath: String,
+    val projectPath: String = "",
 )
 
 @Serializable

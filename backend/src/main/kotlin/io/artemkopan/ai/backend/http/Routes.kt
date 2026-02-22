@@ -68,10 +68,11 @@ fun Application.configureRoutes() {
 
             post("/chats") {
                 val request = call.receive<CreateChatRequest>()
-                val chatId = chatManager.createChat(request.projectPath)
+                val projectPath = request.projectPath.ifEmpty { config.projectsRoot }
+                val chatId = chatManager.createChat(projectPath)
                 val chatInfo = ChatInfo(
                     chatId = chatId,
-                    projectPath = request.projectPath,
+                    projectPath = projectPath,
                     status = ChatStatus.idle,
                     since = java.time.Instant.now().toString(),
                 )

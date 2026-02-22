@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "./scripts/hook-cursor-before-shell"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "./scripts/hook-cursor-after-shell"
+      }
+    ]
+  }
+}

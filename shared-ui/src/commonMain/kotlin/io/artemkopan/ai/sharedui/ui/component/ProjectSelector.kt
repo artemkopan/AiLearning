@@ -29,23 +29,37 @@ import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 @Composable
 fun ProjectSelector(
     projects: List<ProjectInfo>,
+    onNewSession: () -> Unit,
     onProjectSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     Column(modifier = modifier) {
-        // "+ NEW SESSION" button
+        // "+ NEW SESSION" button — creates chat immediately with default path
         Text(
-            text = if (expanded) "- CANCEL" else "+ NEW SESSION",
+            text = "+ NEW SESSION",
             style = MaterialTheme.typography.labelMedium,
             color = CyberpunkColors.NeonGreen,
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(2.dp))
                 .background(CyberpunkColors.NeonGreen.copy(alpha = 0.1f))
-                .clickable { expanded = !expanded }
+                .clickable { onNewSession() }
                 .padding(horizontal = 10.dp, vertical = 8.dp),
+        )
+
+        // Toggle for project picker
+        Text(
+            text = if (expanded) "- CANCEL" else "> IN PROJECT...",
+            style = MaterialTheme.typography.labelSmall,
+            color = CyberpunkColors.Yellow,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 10.dp, vertical = 4.dp),
         )
 
         // Expandable project list

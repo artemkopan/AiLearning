@@ -39,7 +39,7 @@ data class UiState(
 )
 
 sealed interface UiAction {
-    data class CreateChat(val projectPath: String) : UiAction
+    data class CreateChat(val projectPath: String = "") : UiAction
     data class SelectChat(val chatId: String) : UiAction
     data class CloseChat(val chatId: String) : UiAction
     data class StatusUpdated(val chatId: String, val status: ChatStatus) : UiAction
@@ -135,7 +135,7 @@ class AppViewModel(
             createChat(projectPath)
                 .onSuccess { chatId ->
                     log.i { "Created chat $chatId" }
-                    val projectName = projectPath.substringAfterLast('/')
+                    val projectName = projectPath.substringAfterLast('/').ifEmpty { "~" }
                     val tab = ChatTab(
                         chatId = chatId,
                         projectPath = projectPath,

@@ -11,11 +11,17 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8081}
       PORT: ${PORT:-8080}
       PROJECTS_ROOT: /docker/shared
+      HOOKS_DIR: /docker/shared/ai-learning/scripts
     ports:
       - "${PORT:-8080}:8080"
     volumes:
       - "${HOME}/projects:/docker/shared"
       - "./docker/backend:/docker/backend"
       - "./docker/backend/.gradle:/root/.gradle"
+      - "./docker/backend/.m2:/root/.m2"
+      - "./docker/backend/.android:/root/.android"
+      - "./docker/backend/android-sdk:/opt/android-sdk"
+      - "./docker/backend/.kotlin:/root/.kotlin"
       - "./docker/backend/.cursor:/root/.cursor"
       - "./docker/backend/.claude:/root/.claude"
+      - "./docker/backend/.claude/.claude.json:/root/.claude.json"

@@ -1,0 +1,15 @@
+.git
+.gitignore
+.gradle
+.kotlin
+.idea
+.DS_Store
+**/build
+**/node_modules
+**/.DS_Store
+*.log
+README.md
+AGENTS.md
+CLAUDE.md
+docker/
+scripts/

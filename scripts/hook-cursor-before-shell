@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+payload="$(cat 2>/dev/null || true)"
+log_file="${HOOKS_LOG_FILE:-/tmp/agent-hooks.log}"
+
+{
+  printf '[%s] cursor-before-shell cwd=%s\n' "$(date -Iseconds)" "$(pwd)"
+  if [ -n "${payload}" ]; then
+    printf '%s\n' "${payload}"
+  fi
+} >> "${log_file}"

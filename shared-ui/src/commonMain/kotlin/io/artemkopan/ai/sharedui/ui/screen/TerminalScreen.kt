@@ -56,6 +56,9 @@ fun TerminalScreen(
 
                     ProjectSelector(
                         projects = uiState.projects,
+                        onNewSession = {
+                            viewModel.onAction(UiAction.CreateChat())
+                        },
                         onProjectSelected = { path ->
                             viewModel.onAction(UiAction.CreateChat(path))
                         },

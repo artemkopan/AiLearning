@@ -27,3 +27,12 @@ out/
 
 # Docker backend local state
 docker/backend/.gradle/
+docker/backend/.m2/
+docker/backend/.android/
+docker/backend/android-sdk/
+docker/backend/.kotlin/
+/docker/backend/.claude/backups/
+/docker/backend/.claude/cache/
+/docker/backend/.claude/debug/
+/docker/backend/.cursor/
+/docker/backend/.claude/
