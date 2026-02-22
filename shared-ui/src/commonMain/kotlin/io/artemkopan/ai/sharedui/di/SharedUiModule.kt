@@ -1,10 +1,10 @@
 package io.artemkopan.ai.sharedui.di
 
-import io.artemkopan.ai.sharedui.gateway.BACKEND_BASE_URL
 import io.artemkopan.ai.sharedui.gateway.EventsClient
 import io.artemkopan.ai.sharedui.gateway.HttpTerminalGateway
 import io.artemkopan.ai.sharedui.gateway.TerminalGateway
 import io.artemkopan.ai.sharedui.gateway.createPlatformHttpClient
+import io.artemkopan.ai.sharedui.gateway.resolveBackendBaseUrl
 import io.artemkopan.ai.sharedui.state.AppViewModel
 import io.artemkopan.ai.sharedui.usecase.CloseChatUseCase
 import io.artemkopan.ai.sharedui.usecase.CreateChatUseCase
@@ -15,7 +15,7 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val sharedModule = module {
-    single { createPlatformHttpClient(BACKEND_BASE_URL) }
+    single { createPlatformHttpClient(resolveBackendBaseUrl()) }
     single<TerminalGateway> { HttpTerminalGateway(get()) }
     single { EventsClient(get()) }
     factory { LoadProjectsUseCase(get()) }

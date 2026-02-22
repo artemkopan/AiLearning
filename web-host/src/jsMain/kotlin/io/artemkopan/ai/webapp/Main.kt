@@ -4,7 +4,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.CanvasBasedWindow
 import co.touchlab.kermit.Logger
 import io.artemkopan.ai.sharedui.di.sharedModule
-import io.artemkopan.ai.sharedui.gateway.BACKEND_BASE_URL
+import io.artemkopan.ai.sharedui.gateway.resolveBackendBaseUrl
 import io.artemkopan.ai.sharedui.state.AppViewModel
 import io.artemkopan.ai.sharedui.ui.screen.TerminalScreen
 import kotlinx.browser.window
@@ -12,9 +12,10 @@ import org.koin.compose.KoinApplication
 import org.koin.compose.viewmodel.koinViewModel
 
 private val log = Logger.withTag("Main")
+private val backendBaseUrl by lazy { resolveBackendBaseUrl() }
 
 fun main() {
-    log.i { "Frontend initialized. Backend URL: $BACKEND_BASE_URL" }
+    log.i { "Frontend initialized. Backend URL: $backendBaseUrl" }
     awaitSkikoReady { startApp() }
 }
 
@@ -46,7 +47,7 @@ private fun awaitSkikoReady(onReady: () -> Unit) {
 @OptIn(ExperimentalComposeUiApi::class)
 private fun startApp() {
     log.i { "Starting Compose UI" }
-    val xtermBridge = XtermBridge(BACKEND_BASE_URL)
+    val xtermBridge = XtermBridge(backendBaseUrl)
     log.d { "XtermBridge created" }
 
     CanvasBasedWindow(title = "Terminal") {

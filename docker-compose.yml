@@ -12,16 +12,62 @@ services:
       PORT: ${PORT:-8080}
       PROJECTS_ROOT: /docker/shared
       HOOKS_DIR: /docker/shared/ai-learning/scripts
+    expose:
+      - "8080"
     ports:
-      - "${PORT:-8080}:8080"
+      - "${BACKEND_HOST_PORT:-18080}:8080"
+    networks:
+      - ai-learning-bridge
     volumes:
       - "${HOME}/projects:/docker/shared"
       - "./docker/backend:/docker/backend"
-      - "./docker/backend/.gradle:/root/.gradle"
-      - "./docker/backend/.m2:/root/.m2"
-      - "./docker/backend/.android:/root/.android"
+      - "./docker/backend/.gradle:/home/developer/.gradle"
+      - "${HOME}/.gradle/gradle.properties:/home/developer/.gradle/gradle.properties:ro"
+      - "./docker/backend/.m2:/home/developer/.m2"
+      - "./docker/backend/.android:/home/developer/.android"
       - "./docker/backend/android-sdk:/opt/android-sdk"
-      - "./docker/backend/.kotlin:/root/.kotlin"
-      - "./docker/backend/.cursor:/root/.cursor"
-      - "./docker/backend/.claude:/root/.claude"
-      - "./docker/backend/.claude/.claude.json:/root/.claude.json"
+      - "./docker/backend/.kotlin:/home/developer/.kotlin"
+      - "./docker/backend/.cursor:/home/developer/.cursor"
+      - "./docker/backend/.claude:/home/developer/.claude"
+      - "./docker/backend/.claude/.claude.json:/home/developer/.claude.json"
+
+  web-host:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev-toolbox
+    env_file:
+      - .env
+    depends_on:
+      - backend
+    working_dir: /docker/shared/ai-learning
+    command: ["/bin/bash", "-lc", "./gradlew :web-host:jsBrowserDevelopmentRun --no-daemon"]
+    environment:
+      PORT: 8081
+      BACKEND_HOST_PORT: ${BACKEND_HOST_PORT:-18080}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL:-}
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      NO_PROXY: "localhost,127.0.0.1"
+    expose:
+      - "8081"
+    ports:
+      - "${WEB_HOST_PORT:-18081}:8081"
+    networks:
+      - ai-learning-bridge
+    volumes:
+      - "${HOME}/projects:/docker/shared"
+      - "./docker/backend:/docker/backend"
+      - "./docker/backend/.gradle:/home/developer/.gradle"
+      - "${HOME}/.gradle/gradle.properties:/home/developer/.gradle/gradle.properties:ro"
+      - "./docker/backend/.m2:/home/developer/.m2"
+      - "./docker/backend/.android:/home/developer/.android"
+      - "./docker/backend/android-sdk:/opt/android-sdk"
+      - "./docker/backend/.kotlin:/home/developer/.kotlin"
+
+networks:
+  ai-learning-bridge:
+    driver: bridge

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+payload="$(cat 2>/dev/null || true)"
+lower_payload="$(printf '%s' "$payload" | tr '[:upper:]' '[:lower:]')"
+
+# Block git push (including force push).
+if printf '%s' "$lower_payload" | grep -E -q '(^|[^a-z])git[[:space:]]+push([[:space:]]|$)'; then
+  echo "Blocked: git push is not allowed by policy." >&2
+  exit 2
+fi
+
+exit 0

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "permissions": {
+    "allow": [
+      "Shell(*)"
+    ],
+    "deny": [
+      "Shell(git push*)",
+      "Shell(git push --force*)"
+    ]
+  },
+  "approvalMode": "force",
+  "sandbox": {
+    "mode": "disabled",
+    "networkAccess": "user_config_with_defaults"
+  }
+}

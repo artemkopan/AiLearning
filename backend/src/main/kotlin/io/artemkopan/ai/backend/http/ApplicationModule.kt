@@ -48,7 +48,21 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         allowMethod(HttpMethod.Post)
         allowMethod(HttpMethod.Delete)
         allowHeader(HttpHeaders.ContentType)
-        allowHost(config.corsOrigin, schemes = listOf("http", "https"))
+        val corsHosts = config.corsOrigin
+            .split(",")
+            .map { host ->
+                host.trim()
+                    .removePrefix("http://")
+                    .removePrefix("https://")
+                    .removeSuffix("/")
+            }
+            .filter { it.isNotBlank() }
+
+        if (corsHosts.any { it == "*" }) {
+            anyHost()
+        } else {
+            corsHosts.forEach { allowHost(it, schemes = listOf("http", "https")) }
+        }
     }
 
     install(StatusPages) {

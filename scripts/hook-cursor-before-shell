@@ -10,3 +10,7 @@ log_file="${HOOKS_LOG_FILE:-/tmp/agent-hooks.log}"
     printf '%s\n' "${payload}"
   fi
 } >> "${log_file}"
+
+if ! printf '%s' "${payload}" | "$(dirname "$0")/hook-block-git-write"; then
+  exit 2
+fi

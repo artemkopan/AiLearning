@@ -7,6 +7,7 @@ ARG GRADLE_VERSION=8.10.2
 ARG GRADLE_85_VERSION=8.5
 ARG ANDROID_CMDLINE_TOOLS_VERSION=14742923
 ARG TARGETARCH
+ARG APP_USER=developer
 
 ENV JAVA17_HOME=/usr/lib/jvm/java-17-openjdk-${TARGETARCH}
 ENV JAVA21_HOME=/usr/lib/jvm/java-21-openjdk-${TARGETARCH}
@@ -14,7 +15,9 @@ ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-${TARGETARCH}
 ENV GRADLE_85_HOME=/opt/gradle-8.5
 ENV ANDROID_HOME=/opt/android-sdk
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
-ENV PATH=/root/.local/bin:/opt/gradle/bin:${JAVA_HOME}/bin:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${PATH}
+ENV APP_USER=${APP_USER}
+ENV APP_HOME=/home/${APP_USER}
+ENV PATH=${APP_HOME}/.local/bin:/opt/gradle/bin:${JAVA_HOME}/bin:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${PATH}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -31,6 +34,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xz-utils \
     zip \
     && rm -rf /var/lib/apt/lists/*
+
+# Create an unprivileged runtime user for terminal tooling (Claude/Cursor).
+RUN groupadd --system "${APP_USER}" \
+    && useradd --system --create-home --shell /bin/bash --gid "${APP_USER}" "${APP_USER}" \
+    && mkdir -p "${APP_HOME}/.local/bin" /workspace \
+    && chown -R "${APP_USER}:${APP_USER}" "${APP_HOME}" /workspace
 
 # Install Gradle from official distribution.
 RUN curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o /tmp/gradle.zip \
@@ -62,9 +71,9 @@ RUN mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools" /root/.android \
        fi
 
 # Install Claude Code (native installer) and Cursor CLI.
-RUN curl -fsSL https://claude.ai/install.sh | bash \
-    && curl -fsSL https://cursor.com/install | bash \
-    && ln -sf /root/.local/bin/cursor-agent /usr/local/bin/cursor-agent \
+RUN runuser -u "${APP_USER}" -- bash -lc 'curl -fsSL https://claude.ai/install.sh | bash' \
+    && runuser -u "${APP_USER}" -- bash -lc 'curl -fsSL https://cursor.com/install | bash' \
+    && ln -sf "${APP_HOME}/.local/bin/cursor-agent" /usr/local/bin/cursor-agent \
     && ln -sf /usr/local/bin/cursor-agent /usr/local/bin/agent
 
 # Add gdclaude helper to interactive shells in the container.
@@ -97,23 +106,59 @@ gdclaude() {
 }
 EOF
 RUN chmod 0644 /etc/profile.d/gdclaude.sh \
+    && touch /root/.bashrc "${APP_HOME}/.bashrc" \
     && grep -qxF 'source /etc/profile.d/gdclaude.sh' /root/.bashrc \
-      || echo 'source /etc/profile.d/gdclaude.sh' >> /root/.bashrc
+      || echo 'source /etc/profile.d/gdclaude.sh' >> /root/.bashrc \
+    && grep -qxF 'source /etc/profile.d/gdclaude.sh' "${APP_HOME}/.bashrc" \
+      || echo 'source /etc/profile.d/gdclaude.sh' >> "${APP_HOME}/.bashrc" \
+    && chown "${APP_USER}:${APP_USER}" "${APP_HOME}/.bashrc"
 
 RUN cat > /usr/local/bin/bootstrap-agent-hooks <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
 hooks_dir="${HOOKS_DIR:-/docker/shared/ai-learning/scripts}"
-claude_settings_local="/root/.claude/settings.local.json"
-cursor_hooks="/root/.cursor/hooks.json"
+home_dir="${HOME:-/home/developer}"
+claude_settings_local="${home_dir}/.claude/settings.local.json"
+cursor_hooks="${home_dir}/.cursor/hooks.json"
+cursor_cli_config="${home_dir}/.cursor/cli-config.json"
 
-mkdir -p /root/.claude /root/.cursor
+mkdir -p "${home_dir}/.claude" "${home_dir}/.cursor"
 
 if [ ! -f "${claude_settings_local}" ]; then
   cat > "${claude_settings_local}" <<JSON
 {
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Edit",
+      "MultiEdit",
+      "Write",
+      "Read",
+      "Glob",
+      "Grep",
+      "LS",
+      "WebSearch",
+      "WebFetch(domain:*)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git push --force:*)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${hooks_dir}/hook-block-git-write"
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "matcher": "*",
@@ -146,6 +191,28 @@ if [ ! -f "${cursor_hooks}" ]; then
 JSON
 fi
 
+if [ ! -f "${cursor_cli_config}" ]; then
+  cat > "${cursor_cli_config}" <<JSON
+{
+  "version": 1,
+  "permissions": {
+    "allow": [
+      "Shell(*)"
+    ],
+    "deny": [
+      "Shell(git push*)",
+      "Shell(git push --force*)"
+    ]
+  },
+  "approvalMode": "force",
+  "sandbox": {
+    "mode": "disabled",
+    "networkAccess": "user_config_with_defaults"
+  }
+}
+JSON
+fi
+
 exec "$@"
 EOF
 RUN chmod +x /usr/local/bin/bootstrap-agent-hooks
@@ -164,6 +231,7 @@ RUN java -version \
     && if [ "${TARGETARCH}" = "amd64" ]; then adb version; fi
 
 WORKDIR /workspace
+USER ${APP_USER}
 CMD ["/bin/bash"]
 
 FROM eclipse-temurin:17-jdk AS backend-builder
@@ -174,12 +242,15 @@ RUN chmod +x gradlew
 RUN ./gradlew :backend:installDist --no-daemon
 
 FROM dev-toolbox AS backend-runtime
+USER root
 WORKDIR /opt/app
 
 COPY --from=backend-builder /app/backend/build/install/backend ./backend
+RUN chown -R "${APP_USER}:${APP_USER}" /opt/app
 
 ENV PORT=8080
 EXPOSE 8080
 
+USER ${APP_USER}
 ENTRYPOINT ["/usr/local/bin/bootstrap-agent-hooks"]
 CMD ["./backend/bin/backend"]

@@ -16,10 +16,7 @@ data class AppConfig(
             return AppConfig(
                 port = env["PORT"]?.toIntOrNull() ?: 8080,
                 projectsRoot = env["PROJECTS_ROOT"].orEmpty().ifBlank { "/projects" },
-                corsOrigin = env["CORS_ORIGIN"].orEmpty()
-                    .removePrefix("http://")
-                    .removePrefix("https://")
-                    .ifBlank { "localhost:8081" },
+                corsOrigin = env["CORS_ORIGIN"].orEmpty().ifBlank { "localhost:8081" },
             )
         }
     }
