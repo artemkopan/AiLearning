@@ -5,7 +5,7 @@ import androidx.compose.ui.window.CanvasBasedWindow
 import io.artemkopan.ai.sharedui.di.sharedUiModules
 import io.artemkopan.ai.sharedui.state.AppViewModel
 import io.artemkopan.ai.sharedui.ui.screen.AiAssistantScreen
-import io.artemkopan.ai.webapp.ui.HttpPromptGateway
+import io.artemkopan.ai.webapp.ui.WsAgentGateway
 import co.touchlab.kermit.Logger
 import kotlinx.browser.window
 import org.koin.compose.KoinApplication
@@ -28,7 +28,7 @@ fun main() {
     val backendUrl = resolveBackendUrl()
     Logger.withTag("Main").i { "Frontend initialized. Backend URL: $backendUrl" }
 
-    val gateway = HttpPromptGateway(backendBaseUrl = backendUrl)
+    val gateway = WsAgentGateway(backendBaseUrl = backendUrl)
 
     CanvasBasedWindow(title = "AiAssistant") {
         KoinApplication(application = {

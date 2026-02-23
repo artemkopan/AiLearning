@@ -36,17 +36,17 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import io.artemkopan.ai.sharedcontract.ChatConfigDto
+import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedui.state.AppViewModel
-import io.artemkopan.ai.sharedui.state.ChatState
+import io.artemkopan.ai.sharedui.state.AgentState
 import io.artemkopan.ai.sharedui.state.UiAction
 import io.artemkopan.ai.sharedui.state.UiState
 import io.artemkopan.ai.sharedui.ui.component.AgentModeSelector
-import io.artemkopan.ai.sharedui.ui.component.ChatSidePanel
+import io.artemkopan.ai.sharedui.ui.component.AgentSidePanel
 import io.artemkopan.ai.sharedui.ui.component.ConfigPanel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkTextField
 import io.artemkopan.ai.sharedui.ui.component.ErrorDialog
-import io.artemkopan.ai.sharedui.ui.component.InsertFromChatPopup
+import io.artemkopan.ai.sharedui.ui.component.InsertFromAgentPopup
 import io.artemkopan.ai.sharedui.ui.component.buildInsertItems
 import io.artemkopan.ai.sharedui.ui.component.OutputPanel
 import io.artemkopan.ai.sharedui.ui.component.StatusPanel
@@ -71,8 +71,8 @@ private fun AiAssistantContent(
     state: UiState,
     onAction: (UiAction) -> Unit,
 ) {
-    val activeChat = state.activeChatId?.let { state.chats[it] }
-    val orderedChats = state.chatOrder.mapNotNull { state.chats[it] }
+    val activeAgent = state.activeAgentId?.let { state.agents[it] }
+    val orderedAgents = state.agentOrder.mapNotNull { state.agents[it] }
 
     CyberpunkTheme {
         Surface(
@@ -89,31 +89,31 @@ private fun AiAssistantContent(
                     modifier = Modifier.fillMaxWidth().weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    // Left column — chat list
-                    ChatSidePanel(
-                        chats = orderedChats,
-                        activeChatId = state.activeChatId,
-                        onChatSelected = { onAction(UiAction.SelectChat(it)) },
-                        onChatClosed = { onAction(UiAction.CloseChat(it)) },
-                        onNewChatClicked = { onAction(UiAction.CreateChat) },
+                    // Left column — agent list
+                    AgentSidePanel(
+                        agents = orderedAgents,
+                        activeAgentId = state.activeAgentId,
+                        onAgentSelected = { onAction(UiAction.SelectAgent(it)) },
+                        onAgentClosed = { onAction(UiAction.CloseAgent(it)) },
+                        onNewAgentClicked = { onAction(UiAction.CreateAgent) },
                         modifier = Modifier.width(180.dp).fillMaxHeight(),
                     )
 
                     // Center column — prompt + output
-                    if (activeChat != null) {
+                    if (activeAgent != null) {
                         CenterPromptColumn(
-                            chat = activeChat,
-                            otherChats = orderedChats.filter { it.id != activeChat.id },
+                            agent = activeAgent,
+                            otherAgents = orderedAgents.filter { it.id != activeAgent.id },
                             onAction = onAction,
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                         )
                     }
 
                     // Right column — settings
-                    if (activeChat != null) {
+                    if (activeAgent != null) {
                         SettingsColumn(
-                            chat = activeChat,
-                            chatConfig = state.chatConfig,
+                            agent = activeAgent,
+                            agentConfig = state.agentConfig,
                             onAction = onAction,
                             modifier = Modifier.width(220.dp).fillMaxHeight(),
                         )
@@ -149,8 +149,8 @@ private fun ScreenHeader() {
 
 @Composable
 private fun CenterPromptColumn(
-    chat: ChatState,
-    otherChats: List<ChatState>,
+    agent: AgentState,
+    otherAgents: List<AgentState>,
     onAction: (UiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -158,21 +158,21 @@ private fun CenterPromptColumn(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val hasResponse = chat.response != null
+        val hasResponse = agent.response != null
 
-        var textFieldValue by remember(chat.id) {
-            mutableStateOf(TextFieldValue(text = chat.prompt, selection = TextRange(chat.prompt.length)))
+        var textFieldValue by remember(agent.id) {
+            mutableStateOf(TextFieldValue(text = agent.prompt, selection = TextRange(agent.prompt.length)))
         }
         // Sync external changes (e.g. tab switch populating prompt from ViewModel)
-        if (textFieldValue.text != chat.prompt) {
-            textFieldValue = TextFieldValue(text = chat.prompt, selection = TextRange(chat.prompt.length))
+        if (textFieldValue.text != agent.prompt) {
+            textFieldValue = TextFieldValue(text = agent.prompt, selection = TextRange(agent.prompt.length))
         }
 
         var showInsertPopup by remember { mutableStateOf(false) }
         var slashPosition by remember { mutableStateOf(-1) }
         var selectedIndex by remember { mutableIntStateOf(0) }
 
-        val insertItems = remember(otherChats) { buildInsertItems(otherChats) }
+        val insertItems = remember(otherAgents) { buildInsertItems(otherAgents) }
         val referenceHighlight = remember { ReferenceHighlightTransformation() }
 
         fun performInsert(content: String) {
@@ -263,7 +263,7 @@ private fun CenterPromptColumn(
                 visualTransformation = referenceHighlight,
             )
 
-            InsertFromChatPopup(
+            InsertFromAgentPopup(
                 expanded = showInsertPopup,
                 onDismiss = ::dismissPopup,
                 items = insertItems,
@@ -273,15 +273,18 @@ private fun CenterPromptColumn(
         }
 
         SubmitButton(
-            isLoading = chat.isLoading,
+            isLoading = agent.isLoading,
             onClick = { onAction(UiAction.Submit) },
         )
 
-        if (chat.isLoading) {
-            StatusPanel(modifier = Modifier.fillMaxWidth())
+        if (agent.isLoading) {
+            StatusPanel(
+                status = agent.status,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
 
-        chat.response?.let { response ->
+        agent.response?.let { response ->
             OutputPanel(
                 response = response,
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -317,8 +320,8 @@ private fun insertContent(content: String, slashPos: Int, current: TextFieldValu
 
 @Composable
 private fun SettingsColumn(
-    chat: ChatState,
-    chatConfig: ChatConfigDto?,
+    agent: AgentState,
+    agentConfig: AgentConfigDto?,
     onAction: (UiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -327,22 +330,22 @@ private fun SettingsColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         AgentModeSelector(
-            selected = chat.agentMode,
+            selected = agent.agentMode,
             onModeSelected = { onAction(UiAction.AgentModeChanged(it)) },
             modifier = Modifier.fillMaxWidth(),
         )
 
         ConfigPanel(
-            model = chat.model,
+            model = agent.model,
             onModelChanged = { onAction(UiAction.ModelChanged(it)) },
-            maxOutputTokens = chat.maxOutputTokens,
+            maxOutputTokens = agent.maxOutputTokens,
             onMaxOutputTokensChanged = { onAction(UiAction.MaxOutputTokensChanged(it)) },
-            temperature = chat.temperature,
+            temperature = agent.temperature,
             onTemperatureChanged = { onAction(UiAction.TemperatureChanged(it)) },
-            stopSequences = chat.stopSequences,
+            stopSequences = agent.stopSequences,
             onStopSequencesChanged = { onAction(UiAction.StopSequencesChanged(it)) },
-            models = chatConfig?.models.orEmpty(),
-            temperaturePlaceholder = chatConfig?.let {
+            models = agentConfig?.models.orEmpty(),
+            temperaturePlaceholder = agentConfig?.let {
                 "${it.temperatureMin} – ${it.temperatureMax}"
             } ?: "0.0 – 2.0",
             modifier = Modifier.fillMaxWidth(),

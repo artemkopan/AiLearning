@@ -44,10 +44,33 @@ data class ModelOptionDto(
 )
 
 @Serializable
-data class ChatConfigDto(
+data class AgentConfigDto(
     val models: List<ModelOptionDto>,
     val defaultModel: String,
     val temperatureMin: Double,
     val temperatureMax: Double,
     val defaultTemperature: Double,
+)
+
+@Serializable
+data class AgentResponseDto(
+    val text: String,
+    val provider: String,
+    val model: String,
+    val usage: TokenUsageDto? = null,
+    val latencyMs: Long = 0,
+)
+
+@Serializable
+data class AgentDto(
+    val id: String,
+    val title: String,
+    val prompt: String = "",
+    val model: String = "",
+    val maxOutputTokens: String = "",
+    val temperature: String = "",
+    val stopSequences: String = "",
+    val agentMode: AgentMode = AgentMode.DEFAULT,
+    val status: String,
+    val response: AgentResponseDto? = null,
 )

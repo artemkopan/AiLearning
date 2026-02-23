@@ -1,12 +1,22 @@
 package io.artemkopan.ai.backend.http
 
+import io.artemkopan.ai.backend.agent.ws.AgentWsMapper
+import io.artemkopan.ai.backend.agent.ws.AgentWsMessageHandler
+import io.artemkopan.ai.backend.agent.ws.AgentWsSessionRegistry
 import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.backend.di.appModules
 import io.artemkopan.ai.core.application.error.AppError
+import io.artemkopan.ai.core.application.usecase.CloseAgentUseCase
+import io.artemkopan.ai.core.application.usecase.CreateAgentUseCase
+import io.artemkopan.ai.core.application.usecase.GetAgentStateUseCase
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
 import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
-import io.artemkopan.ai.sharedcontract.ChatConfigDto
+import io.artemkopan.ai.core.application.usecase.SelectAgentUseCase
+import io.artemkopan.ai.core.application.usecase.SetAgentStatusUseCase
+import io.artemkopan.ai.core.application.usecase.SubmitAgentUseCase
+import io.artemkopan.ai.core.application.usecase.UpdateAgentDraftUseCase
+import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.ErrorResponseDto
 import io.artemkopan.ai.sharedcontract.GenerateRequestDto
 import io.artemkopan.ai.sharedcontract.GenerateResponseDto
@@ -17,6 +27,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.application.log
 import io.ktor.server.plugins.calllogging.CallLogging
@@ -28,8 +39,11 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.ktor.server.websocket.WebSockets
+import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.Frame
+import io.ktor.websocket.readText
 import kotlinx.serialization.json.Json
-import org.koin.dsl.module
 import org.koin.ktor.ext.inject
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
@@ -40,10 +54,13 @@ private val RequestIdKey = io.ktor.util.AttributeKey<String>("requestId")
 fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
     val logger = log
     logger.info(
-        "Application config: port={}, geminiModel={}, corsOrigin={}, geminiApiKeyPresent={}",
+        "Application config: port={}, geminiModel={}, corsOrigin={}, dbHost={}, dbPort={}, dbName={}, geminiApiKeyPresent={}",
         config.port,
         config.defaultModel,
         config.corsOrigin,
+        config.dbHost,
+        config.dbPort,
+        config.dbName,
         config.geminiApiKey.isNotBlank(),
     )
 
@@ -54,16 +71,25 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
 
     val generateTextUseCase by inject<GenerateTextUseCase>()
     val mapFailureToUserMessageUseCase by inject<MapFailureToUserMessageUseCase>()
+    val getAgentStateUseCase by inject<GetAgentStateUseCase>()
+    val createAgentUseCase by inject<CreateAgentUseCase>()
+    val selectAgentUseCase by inject<SelectAgentUseCase>()
+    val updateAgentDraftUseCase by inject<UpdateAgentDraftUseCase>()
+    val closeAgentUseCase by inject<CloseAgentUseCase>()
+    val setAgentStatusUseCase by inject<SetAgentStatusUseCase>()
+    val submitAgentUseCase by inject<SubmitAgentUseCase>()
+
+    val appJson = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+        classDiscriminator = "type"
+    }
 
     install(CallLogging)
     install(ContentNegotiation) {
-        json(
-            Json {
-                ignoreUnknownKeys = true
-                explicitNulls = false
-            }
-        )
+        json(appJson)
     }
+    install(WebSockets)
     install(CORS) {
         allowMethod(HttpMethod.Post)
         allowMethod(HttpMethod.Get)
@@ -94,6 +120,23 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         }
     }
 
+    val wsSessionRegistry = AgentWsSessionRegistry()
+    val wsMapper = AgentWsMapper()
+    val wsHandler = AgentWsMessageHandler(
+        getAgentStateUseCase = getAgentStateUseCase,
+        createAgentUseCase = createAgentUseCase,
+        selectAgentUseCase = selectAgentUseCase,
+        updateAgentDraftUseCase = updateAgentDraftUseCase,
+        closeAgentUseCase = closeAgentUseCase,
+        setAgentStatusUseCase = setAgentStatusUseCase,
+        submitAgentUseCase = submitAgentUseCase,
+        mapFailureToUserMessageUseCase = mapFailureToUserMessageUseCase,
+        sessionRegistry = wsSessionRegistry,
+        mapper = wsMapper,
+        json = appJson,
+        logger = logger,
+    )
+
     routing {
         get("/health") {
             logger.info("GET /health")
@@ -103,7 +146,7 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         get("/api/v1/config") {
             call.respond(
                 HttpStatusCode.OK,
-                ChatConfigDto(
+                AgentConfigDto(
                     models = listOf(
                         ModelOptionDto(id = "gemini-3-flash-preview", name = "Gemini 3 Flash Preview", provider = "gemini"),
                         ModelOptionDto(id = "gemini-2.5-flash", name = "Gemini 2.5 Flash", provider = "gemini"),
@@ -116,6 +159,19 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
                     defaultTemperature = 0.7,
                 )
             )
+        }
+
+        webSocket("/api/v1/agents/ws") {
+            wsHandler.onConnected(this)
+            try {
+                for (frame in incoming) {
+                    if (frame is Frame.Text) {
+                        wsHandler.onTextMessage(this, frame.readText())
+                    }
+                }
+            } finally {
+                wsHandler.onDisconnected(this)
+            }
         }
 
         post("/api/v1/generate") {

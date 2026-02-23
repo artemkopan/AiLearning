@@ -17,6 +17,7 @@ import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 
 @Composable
 fun StatusPanel(
+    status: String,
     modifier: Modifier = Modifier,
 ) {
     CyberpunkPanel(
@@ -36,7 +37,7 @@ fun StatusPanel(
             )
             Spacer(modifier = Modifier.width(12.dp))
             Text(
-                "GENERATING RESPONSE...",
+                status.uppercase(),
                 style = MaterialTheme.typography.labelMedium,
                 color = CyberpunkColors.Cyan,
             )

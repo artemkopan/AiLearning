@@ -70,7 +70,9 @@ Koin-based DI via `appModules()`. Create new use cases there and wire dependenci
 ### API Endpoints
 
 - `GET /health` - Health check
+- `GET /api/v1/config` - Agent config
 - `POST /api/v1/generate` - Text generation (accepts `GenerateRequestDto`, returns `GenerateResponseDto`)
+- `WS /api/v1/agents/ws` - Agent state sync and commands
 
 ### shared-ui Component Structure
 
@@ -81,7 +83,7 @@ shared-ui/src/commonMain/kotlin/io/artemkopan/ai/sharedui/
 ├── state/
 │   └── AppViewModel.kt            → ViewModel, UiState, UiAction, GenerationResult, UsageResult
 ├── gateway/
-│   └── PromptGateway.kt           → HTTP gateway interface for backend communication
+│   └── AgentGateway.kt            → WS + HTTP gateway interface for backend communication
 ├── ui/
 │   ├── theme/                     → Visual identity
 │   │   ├── CyberpunkColors.kt     → Color palette object (Yellow, Cyan, NeonGreen, Red, backgrounds, text)

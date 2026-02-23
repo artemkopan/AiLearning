@@ -51,7 +51,7 @@ fun OutputPanel(
             val tint = if (copied) CyberpunkColors.NeonGreen else CyberpunkColors.TextSecondary
             Surface(
                 onClick = {
-                    copyToClipboard(response.text)
+                    copyToClipboard(response.toClipboardText())
                     copied = true
                     scope.launch {
                         delay(1500)
@@ -94,7 +94,7 @@ fun OutputPanel(
                 )
 
                 Text(
-                    text = "PROVIDER: ${response.provider.uppercase()}  //  MODEL: ${response.model.uppercase()}",
+                    text = "PROVIDER: ${response.provider.uppercase()}  //  MODEL: ${response.model.uppercase()}  //  ${response.latencyMs}ms",
                     style = MaterialTheme.typography.bodySmall,
                     color = CyberpunkColors.NeonGreen,
                 )
@@ -119,6 +119,13 @@ fun OutputPanel(
             )
         }
     }
+}
+
+private fun GenerationResult.toClipboardText(): String = buildString {
+    appendLine(text)
+    appendLine()
+    appendLine("Provider: $provider  |  Model: $model  |  ${latencyMs}ms")
+    usage?.let { appendLine("Tokens  In: ${it.inputTokens}  Out: ${it.outputTokens}  Total: ${it.totalTokens}") }
 }
 
 private val CopyIcon: ImageVector by lazy {

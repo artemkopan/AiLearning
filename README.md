@@ -20,11 +20,11 @@ All public service/usecase/repository/client methods return `Result<T>`.
 
 ## Environment
 
-Copy `.env.example` and set your key:
+Copy `.env.example` and set values:
 
 ```bash
 cp .env.example .env
-# then set GEMINI_API_KEY in .env
+# set GEMINI_API_KEY and DB_* values in .env
 ```
 
 ## Run backend (Docker)
@@ -33,7 +33,7 @@ cp .env.example .env
 docker compose --env-file .env up --build backend
 ```
 
-Backend will be available on `http://localhost:8080`.
+Backend will be available on `http://localhost:8080` and PostgreSQL on `localhost:5432`.
 
 ## Run web app (local)
 
@@ -46,7 +46,9 @@ Default web URL is usually `http://localhost:8081`.
 ## Backend API
 
 - `GET /health`
+- `GET /api/v1/config`
 - `POST /api/v1/generate`
+- `WS /api/v1/agents/ws` (agent list/state sync + statuses)
 
 Request example:
 
@@ -60,6 +62,7 @@ Request example:
 
 ## Notes
 
-- Stateless single-turn prompting.
+- Agents are persisted in PostgreSQL and synchronized to frontend via WebSocket snapshots.
+- Generation endpoint remains available over HTTP for compatibility.
 - Frontend shows validation and backend failures in an error popup.
 - Current provider implementation is Gemini and can be replaced by adding another `LlmNetworkClient` + repository wiring.
