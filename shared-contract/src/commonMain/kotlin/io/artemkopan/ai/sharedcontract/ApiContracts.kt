@@ -62,15 +62,33 @@ data class AgentResponseDto(
 )
 
 @Serializable
+enum class AgentMessageRoleDto {
+    USER,
+    ASSISTANT,
+}
+
+@Serializable
+data class AgentMessageDto(
+    val id: String,
+    val role: AgentMessageRoleDto,
+    val text: String,
+    val status: String,
+    val createdAt: Long,
+    val provider: String? = null,
+    val model: String? = null,
+    val usage: TokenUsageDto? = null,
+    val latencyMs: Long? = null,
+)
+
+@Serializable
 data class AgentDto(
     val id: String,
     val title: String,
-    val prompt: String = "",
     val model: String = "",
     val maxOutputTokens: String = "",
     val temperature: String = "",
     val stopSequences: String = "",
     val agentMode: AgentMode = AgentMode.DEFAULT,
     val status: String,
-    val response: AgentResponseDto? = null,
+    val messages: List<AgentMessageDto> = emptyList(),
 )

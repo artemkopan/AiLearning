@@ -4,7 +4,9 @@ import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.core.domain.model.Agent
 import io.artemkopan.ai.core.domain.model.AgentDraft
 import io.artemkopan.ai.core.domain.model.AgentId
-import io.artemkopan.ai.core.domain.model.AgentResponse
+import io.artemkopan.ai.core.domain.model.AgentMessage
+import io.artemkopan.ai.core.domain.model.AgentMessageId
+import io.artemkopan.ai.core.domain.model.AgentMessageRole
 import io.artemkopan.ai.core.domain.model.AgentState
 import io.artemkopan.ai.core.domain.model.AgentStatus
 import io.artemkopan.ai.core.domain.model.AgentUsage
@@ -55,7 +57,7 @@ class PostgresAgentRepository(
             row[temperature] = ""
             row[stopSequences] = ""
             row[agentMode] = "default"
-            row[status] = "Ready"
+            row[status] = STATUS_DONE
             row[responseText] = null
             row[responseProvider] = null
             row[responseModel] = null
@@ -100,14 +102,11 @@ class PostgresAgentRepository(
 
         val now = nowMillis()
         AgentsTable.update({ AgentsTable.id eq agentId.value }) { row ->
-            row[title] = resolveTitle(agentId.value, draft.prompt)
-            row[prompt] = draft.prompt
             row[model] = draft.model
             row[maxOutputTokens] = draft.maxOutputTokens
             row[temperature] = draft.temperature
             row[stopSequences] = draft.stopSequences
             row[agentMode] = draft.agentMode.ifBlank { "default" }
-            row[status] = "Ready"
             row[updatedAt] = now
         }
 
@@ -122,6 +121,7 @@ class PostgresAgentRepository(
         val closedIndex = allBefore.indexOf(agentId.value)
         require(closedIndex >= 0) { "Agent not found: ${agentId.value}" }
 
+        AgentMessagesTable.deleteWhere { AgentMessagesTable.agentId eq agentId.value }
         AgentsTable.deleteWhere { id eq agentId.value }
 
         val remaining = AgentsTable.selectAll()
@@ -159,25 +159,93 @@ class PostgresAgentRepository(
         readStateTx()
     }
 
-    override suspend fun saveGenerationResult(
-        agentId: AgentId,
-        response: AgentResponse,
-        status: AgentStatus,
-    ): Result<AgentState> = runDb {
-        val updated = AgentsTable.update({ AgentsTable.id eq agentId.value }) { row ->
-            row[responseText] = response.text
-            row[responseProvider] = response.provider
-            row[responseModel] = response.model
-            row[usageInputTokens] = response.usage?.inputTokens
-            row[usageOutputTokens] = response.usage?.outputTokens
-            row[usageTotalTokens] = response.usage?.totalTokens
-            row[responseLatencyMs] = response.latencyMs
-            row[AgentsTable.status] = status.value
-            row[updatedAt] = nowMillis()
+    override suspend fun appendMessage(agentId: AgentId, message: AgentMessage): Result<AgentState> = runDb {
+        val existing = AgentsTable.selectAll().where { AgentsTable.id eq agentId.value }.singleOrNull()
+        require(existing != null) { "Agent not found: ${agentId.value}" }
+        val currentMaxCreatedAt = AgentMessagesTable.selectAll()
+            .where { AgentMessagesTable.agentId eq agentId.value }
+            .map { it[AgentMessagesTable.createdAt] }
+            .maxOrNull()
+        val requestedCreatedAt = message.createdAt.takeIf { it > 0 } ?: nowMillis()
+        val persistedCreatedAt = currentMaxCreatedAt
+            ?.let { maxOf(requestedCreatedAt, it + 1) }
+            ?: requestedCreatedAt
+
+        AgentMessagesTable.insert { row ->
+            row[id] = message.id.value
+            row[AgentMessagesTable.agentId] = agentId.value
+            row[role] = when (message.role) {
+                AgentMessageRole.USER -> ROLE_USER
+                AgentMessageRole.ASSISTANT -> ROLE_ASSISTANT
+            }
+            row[text] = message.text
+            row[status] = message.status
+            row[createdAt] = persistedCreatedAt
+            row[provider] = message.provider
+            row[model] = message.model
+            row[usageInputTokens] = message.usage?.inputTokens
+            row[usageOutputTokens] = message.usage?.outputTokens
+            row[usageTotalTokens] = message.usage?.totalTokens
+            row[latencyMs] = message.latencyMs
         }
-        require(updated > 0) { "Agent not found: ${agentId.value}" }
+
+        if (message.role == AgentMessageRole.USER && message.text.isNotBlank()) {
+            val currentTitle = existing[AgentsTable.title]
+            if (currentTitle.startsWith("Agent ")) {
+                val newTitle = message.text.lineSequence().firstOrNull()?.trim().orEmpty().take(MAX_TITLE_LENGTH)
+                if (newTitle.isNotBlank()) {
+                    AgentsTable.update({ AgentsTable.id eq agentId.value }) { row ->
+                        row[title] = newTitle
+                        row[updatedAt] = nowMillis()
+                    }
+                }
+            }
+        }
+
         bumpVersionTx()
         readStateTx()
+    }
+
+    override suspend fun updateMessage(
+        agentId: AgentId,
+        messageId: AgentMessageId,
+        text: String?,
+        status: String?,
+        provider: String?,
+        model: String?,
+        usageInputTokens: Int?,
+        usageOutputTokens: Int?,
+        usageTotalTokens: Int?,
+        latencyMs: Long?,
+    ): Result<AgentState> = runDb {
+        val updated = AgentMessagesTable.update({
+            (AgentMessagesTable.agentId eq agentId.value) and (AgentMessagesTable.id eq messageId.value)
+        }) { row ->
+            if (text != null) row[AgentMessagesTable.text] = text
+            if (status != null) row[AgentMessagesTable.status] = status
+            if (provider != null) row[AgentMessagesTable.provider] = provider
+            if (model != null) row[AgentMessagesTable.model] = model
+            if (usageInputTokens != null) row[AgentMessagesTable.usageInputTokens] = usageInputTokens
+            if (usageOutputTokens != null) row[AgentMessagesTable.usageOutputTokens] = usageOutputTokens
+            if (usageTotalTokens != null) row[AgentMessagesTable.usageTotalTokens] = usageTotalTokens
+            if (latencyMs != null) row[AgentMessagesTable.latencyMs] = latencyMs
+        }
+        require(updated > 0) { "Message not found: ${messageId.value}" }
+
+        bumpVersionTx()
+        readStateTx()
+    }
+
+    override suspend fun findMessage(agentId: AgentId, messageId: AgentMessageId): Result<AgentMessage?> = runDb {
+        AgentMessagesTable.selectAll().where {
+            (AgentMessagesTable.agentId eq agentId.value) and (AgentMessagesTable.id eq messageId.value)
+        }.singleOrNull()?.let(::toMessage)
+    }
+
+    override suspend fun hasProcessingMessage(agentId: AgentId): Result<Boolean> = runDb {
+        AgentMessagesTable.selectAll().where {
+            (AgentMessagesTable.agentId eq agentId.value) and (AgentMessagesTable.status eq STATUS_PROCESSING)
+        }.any()
     }
 
     private suspend fun <T> runDb(block: () -> T): Result<T> = runCatching {
@@ -203,7 +271,7 @@ class PostgresAgentRepository(
             )
 
             transaction {
-                SchemaUtils.create(AgentStateTable, AgentsTable)
+                SchemaUtils.create(AgentStateTable, AgentsTable, AgentMessagesTable)
                 val existing = AgentStateTable.selectAll().where { AgentStateTable.id eq STATE_ROW_ID }.singleOrNull()
                 if (existing == null) {
                     val now = nowMillis()
@@ -223,9 +291,15 @@ class PostgresAgentRepository(
 
     private fun readStateTx(): AgentState {
         val meta = loadMetaTx()
+        val messageRows = AgentMessagesTable.selectAll()
+            .orderBy(AgentMessagesTable.createdAt, SortOrder.ASC)
+            .orderBy(AgentMessagesTable.id, SortOrder.ASC)
+            .groupBy { it[AgentMessagesTable.agentId] }
+            .mapValues { (_, rows) -> rows.map(::toMessage) }
+
         val agents = AgentsTable.selectAll()
             .orderBy(AgentsTable.position, SortOrder.ASC)
-            .map(::toAgent)
+            .map { row -> toAgent(row, messageRows[row[AgentsTable.id]].orEmpty()) }
 
         val activeIdRaw = meta[AgentStateTable.activeAgentId]
         val activeExists = activeIdRaw != null && agents.any { it.id.value == activeIdRaw }
@@ -263,47 +337,45 @@ class PostgresAgentRepository(
         }
     }
 
-    private fun toAgent(row: ResultRow): Agent {
-        val usage = if (row[AgentsTable.usageTotalTokens] != null) {
-            AgentUsage(
-                inputTokens = row[AgentsTable.usageInputTokens] ?: 0,
-                outputTokens = row[AgentsTable.usageOutputTokens] ?: 0,
-                totalTokens = row[AgentsTable.usageTotalTokens] ?: 0,
-            )
-        } else {
-            null
-        }
-
-        val response = row[AgentsTable.responseText]?.let {
-            AgentResponse(
-                text = it,
-                provider = row[AgentsTable.responseProvider].orEmpty(),
-                model = row[AgentsTable.responseModel].orEmpty(),
-                usage = usage,
-                latencyMs = row[AgentsTable.responseLatencyMs] ?: 0,
-            )
-        }
-
+    private fun toAgent(row: ResultRow, messages: List<AgentMessage>): Agent {
         return Agent(
             id = AgentId(row[AgentsTable.id]),
             title = row[AgentsTable.title],
-            prompt = row[AgentsTable.prompt],
             model = row[AgentsTable.model],
             maxOutputTokens = row[AgentsTable.maxOutputTokens],
             temperature = row[AgentsTable.temperature],
             stopSequences = row[AgentsTable.stopSequences],
             agentMode = row[AgentsTable.agentMode],
             status = AgentStatus(row[AgentsTable.status]),
-            response = response,
+            messages = messages,
         )
     }
 
-    private fun resolveTitle(agentId: String, prompt: String): String {
-        val firstLine = prompt.lineSequence().firstOrNull()?.trim().orEmpty()
-        if (firstLine.isNotEmpty()) return firstLine.take(MAX_TITLE_LENGTH)
+    private fun toMessage(row: ResultRow): AgentMessage {
+        val usage = if (row[AgentMessagesTable.usageTotalTokens] != null) {
+            AgentUsage(
+                inputTokens = row[AgentMessagesTable.usageInputTokens] ?: 0,
+                outputTokens = row[AgentMessagesTable.usageOutputTokens] ?: 0,
+                totalTokens = row[AgentMessagesTable.usageTotalTokens] ?: 0,
+            )
+        } else {
+            null
+        }
 
-        val suffix = agentId.substringAfter("agent-", missingDelimiterValue = "")
-        return if (suffix.isNotBlank()) "Agent $suffix" else "Agent"
+        return AgentMessage(
+            id = AgentMessageId(row[AgentMessagesTable.id]),
+            role = when (row[AgentMessagesTable.role]) {
+                ROLE_ASSISTANT -> AgentMessageRole.ASSISTANT
+                else -> AgentMessageRole.USER
+            },
+            text = row[AgentMessagesTable.text],
+            status = row[AgentMessagesTable.status],
+            createdAt = row[AgentMessagesTable.createdAt],
+            provider = row[AgentMessagesTable.provider],
+            model = row[AgentMessagesTable.model],
+            usage = usage,
+            latencyMs = row[AgentMessagesTable.latencyMs],
+        )
     }
 
     private fun nowMillis(): Long = System.currentTimeMillis()
@@ -343,6 +415,23 @@ private object AgentsTable : Table("agents") {
     override val primaryKey = PrimaryKey(id)
 }
 
+private object AgentMessagesTable : Table("agent_messages") {
+    val id = varchar("id", 64)
+    val agentId = varchar("agent_id", 64)
+    val role = varchar("role", 32)
+    val text = text("text")
+    val status = varchar("status", 32)
+    val createdAt = long("created_at")
+    val provider = varchar("provider", 64).nullable()
+    val model = varchar("model", 128).nullable()
+    val usageInputTokens = integer("usage_input_tokens").nullable()
+    val usageOutputTokens = integer("usage_output_tokens").nullable()
+    val usageTotalTokens = integer("usage_total_tokens").nullable()
+    val latencyMs = long("latency_ms").nullable()
+
+    override val primaryKey = PrimaryKey(id)
+}
+
 private fun org.jetbrains.exposed.sql.Column<Int>.maxOrNullTx(): Int? {
     return this.table.selectAll()
         .map { it[this] }
@@ -351,3 +440,7 @@ private fun org.jetbrains.exposed.sql.Column<Int>.maxOrNullTx(): Int? {
 
 private const val MAX_TITLE_LENGTH = 20
 private const val STATE_ROW_ID = 1
+private const val STATUS_DONE = "done"
+private const val STATUS_PROCESSING = "processing"
+private const val ROLE_USER = "user"
+private const val ROLE_ASSISTANT = "assistant"

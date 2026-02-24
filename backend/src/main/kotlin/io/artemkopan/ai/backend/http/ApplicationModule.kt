@@ -7,14 +7,15 @@ import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.backend.di.appModules
 import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.application.usecase.CloseAgentUseCase
+import io.artemkopan.ai.core.application.usecase.CompleteAgentMessageUseCase
 import io.artemkopan.ai.core.application.usecase.CreateAgentUseCase
 import io.artemkopan.ai.core.application.usecase.GetAgentStateUseCase
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
 import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
 import io.artemkopan.ai.core.application.usecase.SelectAgentUseCase
-import io.artemkopan.ai.core.application.usecase.SetAgentStatusUseCase
-import io.artemkopan.ai.core.application.usecase.SubmitAgentUseCase
+import io.artemkopan.ai.core.application.usecase.StartAgentMessageUseCase
+import io.artemkopan.ai.core.application.usecase.StopAgentMessageUseCase
 import io.artemkopan.ai.core.application.usecase.UpdateAgentDraftUseCase
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.ErrorResponseDto
@@ -76,8 +77,9 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
     val selectAgentUseCase by inject<SelectAgentUseCase>()
     val updateAgentDraftUseCase by inject<UpdateAgentDraftUseCase>()
     val closeAgentUseCase by inject<CloseAgentUseCase>()
-    val setAgentStatusUseCase by inject<SetAgentStatusUseCase>()
-    val submitAgentUseCase by inject<SubmitAgentUseCase>()
+    val startAgentMessageUseCase by inject<StartAgentMessageUseCase>()
+    val completeAgentMessageUseCase by inject<CompleteAgentMessageUseCase>()
+    val stopAgentMessageUseCase by inject<StopAgentMessageUseCase>()
 
     val appJson = Json {
         ignoreUnknownKeys = true
@@ -128,8 +130,10 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         selectAgentUseCase = selectAgentUseCase,
         updateAgentDraftUseCase = updateAgentDraftUseCase,
         closeAgentUseCase = closeAgentUseCase,
-        setAgentStatusUseCase = setAgentStatusUseCase,
-        submitAgentUseCase = submitAgentUseCase,
+        startAgentMessageUseCase = startAgentMessageUseCase,
+        completeAgentMessageUseCase = completeAgentMessageUseCase,
+        stopAgentMessageUseCase = stopAgentMessageUseCase,
+        generateTextUseCase = generateTextUseCase,
         mapFailureToUserMessageUseCase = mapFailureToUserMessageUseCase,
         sessionRegistry = wsSessionRegistry,
         mapper = wsMapper,

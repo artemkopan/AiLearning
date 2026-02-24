@@ -1,9 +1,11 @@
 package io.artemkopan.ai.backend.agent.ws
 
+import io.artemkopan.ai.core.domain.model.AgentMessageRole
 import io.artemkopan.ai.core.domain.model.AgentState
 import io.artemkopan.ai.sharedcontract.AgentDto
+import io.artemkopan.ai.sharedcontract.AgentMessageDto
+import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
 import io.artemkopan.ai.sharedcontract.AgentMode
-import io.artemkopan.ai.sharedcontract.AgentResponseDto
 import io.artemkopan.ai.sharedcontract.AgentStateSnapshotDto
 import io.artemkopan.ai.sharedcontract.AgentStateSnapshotMessageDto
 import io.artemkopan.ai.sharedcontract.TokenUsageDto
@@ -16,26 +18,32 @@ class AgentWsMapper {
                     AgentDto(
                         id = agent.id.value,
                         title = agent.title,
-                        prompt = agent.prompt,
                         model = agent.model,
                         maxOutputTokens = agent.maxOutputTokens,
                         temperature = agent.temperature,
                         stopSequences = agent.stopSequences,
                         agentMode = parseAgentMode(agent.agentMode),
                         status = agent.status.value,
-                        response = agent.response?.let { response ->
-                            AgentResponseDto(
-                                text = response.text,
-                                provider = response.provider,
-                                model = response.model,
-                                usage = response.usage?.let { usage ->
+                        messages = agent.messages.map { message ->
+                            AgentMessageDto(
+                                id = message.id.value,
+                                role = when (message.role) {
+                                    AgentMessageRole.USER -> AgentMessageRoleDto.USER
+                                    AgentMessageRole.ASSISTANT -> AgentMessageRoleDto.ASSISTANT
+                                },
+                                text = message.text,
+                                status = message.status,
+                                createdAt = message.createdAt,
+                                provider = message.provider,
+                                model = message.model,
+                                usage = message.usage?.let { usage ->
                                     TokenUsageDto(
                                         inputTokens = usage.inputTokens,
                                         outputTokens = usage.outputTokens,
                                         totalTokens = usage.totalTokens,
                                     )
                                 },
-                                latencyMs = response.latencyMs,
+                                latencyMs = message.latencyMs,
                             )
                         },
                     )

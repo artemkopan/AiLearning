@@ -1,54 +1,46 @@
 package io.artemkopan.ai.sharedui.ui.screen
 
+import androidx.compose.foundation.LocalScrollbarStyle
+import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
-import io.artemkopan.ai.sharedui.state.AppViewModel
+import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
+import io.artemkopan.ai.sharedui.state.AgentMessageState
 import io.artemkopan.ai.sharedui.state.AgentState
+import io.artemkopan.ai.sharedui.state.AppViewModel
 import io.artemkopan.ai.sharedui.state.UiAction
 import io.artemkopan.ai.sharedui.state.UiState
 import io.artemkopan.ai.sharedui.ui.component.AgentModeSelector
 import io.artemkopan.ai.sharedui.ui.component.AgentSidePanel
 import io.artemkopan.ai.sharedui.ui.component.ConfigPanel
+import io.artemkopan.ai.sharedui.ui.component.CyberpunkPanel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkTextField
 import io.artemkopan.ai.sharedui.ui.component.ErrorDialog
-import io.artemkopan.ai.sharedui.ui.component.InsertFromAgentPopup
-import io.artemkopan.ai.sharedui.ui.component.buildInsertItems
-import io.artemkopan.ai.sharedui.ui.component.OutputPanel
 import io.artemkopan.ai.sharedui.ui.component.StatusPanel
 import io.artemkopan.ai.sharedui.ui.component.SubmitButton
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
@@ -80,42 +72,48 @@ private fun AiAssistantContent(
             color = CyberpunkColors.DarkBackground,
         ) {
             Column(
-                modifier = Modifier.fillMaxSize().padding(20.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 ScreenHeader()
 
                 Row(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    // Left column — agent list
                     AgentSidePanel(
                         agents = orderedAgents,
                         activeAgentId = state.activeAgentId,
                         onAgentSelected = { onAction(UiAction.SelectAgent(it)) },
                         onAgentClosed = { onAction(UiAction.CloseAgent(it)) },
                         onNewAgentClicked = { onAction(UiAction.CreateAgent) },
-                        modifier = Modifier.width(180.dp).fillMaxHeight(),
+                        modifier = Modifier
+                            .width(180.dp)
+                            .fillMaxHeight(),
                     )
 
-                    // Center column — prompt + output
                     if (activeAgent != null) {
-                        CenterPromptColumn(
+                        CenterConversationColumn(
                             agent = activeAgent,
-                            otherAgents = orderedAgents.filter { it.id != activeAgent.id },
                             onAction = onAction,
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
                         )
                     }
 
-                    // Right column — settings
                     if (activeAgent != null) {
                         SettingsColumn(
                             agent = activeAgent,
                             agentConfig = state.agentConfig,
                             onAction = onAction,
-                            modifier = Modifier.width(220.dp).fillMaxHeight(),
+                            modifier = Modifier
+                                .width(220.dp)
+                                .fillMaxHeight(),
                         )
                     }
                 }
@@ -148,9 +146,8 @@ private fun ScreenHeader() {
 }
 
 @Composable
-private fun CenterPromptColumn(
+private fun CenterConversationColumn(
     agent: AgentState,
-    otherAgents: List<AgentState>,
     onAction: (UiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -158,119 +155,64 @@ private fun CenterPromptColumn(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val hasResponse = agent.response != null
-
-        var textFieldValue by remember(agent.id) {
-            mutableStateOf(TextFieldValue(text = agent.prompt, selection = TextRange(agent.prompt.length)))
+        val scrollState = rememberScrollState()
+        val latestMessageSignature = agent.messages.lastOrNull()?.let { message ->
+            "${message.id}:${message.status}:${message.text.length}"
         }
-        // Sync external changes (e.g. tab switch populating prompt from ViewModel)
-        if (textFieldValue.text != agent.prompt) {
-            textFieldValue = TextFieldValue(text = agent.prompt, selection = TextRange(agent.prompt.length))
+        LaunchedEffect(agent.id.value, latestMessageSignature) {
+            scrollState.scrollTo(scrollState.maxValue)
         }
+        CyberpunkPanel(
+            title = "MESSAGES",
+            accentColor = CyberpunkColors.NeonGreen,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(end = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (agent.messages.isEmpty()) {
+                        Text(
+                            text = "NO MESSAGES YET",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = CyberpunkColors.TextMuted,
+                        )
+                    } else {
+                        agent.messages.forEach { message ->
+                            MessageRow(
+                                message = message,
+                                onStop = {
+                                    onAction(UiAction.StopMessage(message.id))
+                                },
+                            )
+                        }
+                    }
+                }
 
-        var showInsertPopup by remember { mutableStateOf(false) }
-        var slashPosition by remember { mutableStateOf(-1) }
-        var selectedIndex by remember { mutableIntStateOf(0) }
-
-        val insertItems = remember(otherAgents) { buildInsertItems(otherAgents) }
-        val referenceHighlight = remember { ReferenceHighlightTransformation() }
-
-        fun performInsert(content: String) {
-            if (slashPosition >= 0) {
-                textFieldValue = insertContent(content, slashPosition, textFieldValue)
-                onAction(UiAction.PromptChanged(textFieldValue.text))
-                showInsertPopup = false
-                slashPosition = -1
-                selectedIndex = 0
+                VerticalScrollbar(
+                    adapter = rememberScrollbarAdapter(scrollState),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight(),
+                    style = LocalScrollbarStyle.current.copy(
+                        unhoverColor = CyberpunkColors.TextPrimary.copy(alpha = 0.5f),
+                        hoverColor = CyberpunkColors.TextPrimary,
+                    ),
+                )
             }
         }
 
-        fun dismissPopup() {
-            showInsertPopup = false
-            slashPosition = -1
-            selectedIndex = 0
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(if (hasResponse) Modifier.heightIn(max = 200.dp) else Modifier.weight(1f)),
-        ) {
-            CyberpunkTextField(
-                value = textFieldValue,
-                onValueChange = { newValue ->
-                    val oldText = textFieldValue.text
-                    textFieldValue = newValue
-
-                    // Auto-dismiss if slash was removed
-                    if (showInsertPopup && slashPosition >= 0) {
-                        if (slashPosition >= newValue.text.length || newValue.text[slashPosition] != '/') {
-                            dismissPopup()
-                        }
-                    }
-
-                    // Detect `/` trigger: text grew by 1, char at cursor-1 is `/`,
-                    // preceded by whitespace/newline or at start of text
-                    if (!showInsertPopup && newValue.text.length == oldText.length + 1) {
-                        val cursor = newValue.selection.start
-                        if (cursor > 0 && newValue.text[cursor - 1] == '/') {
-                            val isAtStart = cursor == 1
-                            val precededByWhitespace = cursor >= 2 && newValue.text[cursor - 2].let {
-                                it == ' ' || it == '\n' || it == '\r' || it == '\t'
-                            }
-                            if (isAtStart || precededByWhitespace) {
-                                slashPosition = cursor - 1
-                                showInsertPopup = true
-                                selectedIndex = 0
-                            }
-                        }
-                    }
-
-                    onAction(UiAction.PromptChanged(newValue.text))
-                },
-                label = "// ENTER PROMPT",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .onPreviewKeyEvent { event ->
-                        if (!showInsertPopup || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        when (event.key) {
-                            Key.Enter -> {
-                                if (insertItems.isNotEmpty()) {
-                                    performInsert(insertItems[selectedIndex].token)
-                                }
-                                true
-                            }
-                            Key.DirectionDown -> {
-                                if (insertItems.isNotEmpty()) {
-                                    selectedIndex = (selectedIndex + 1).mod(insertItems.size)
-                                }
-                                true
-                            }
-                            Key.DirectionUp -> {
-                                if (insertItems.isNotEmpty()) {
-                                    selectedIndex = (selectedIndex - 1).mod(insertItems.size)
-                                }
-                                true
-                            }
-                            Key.Escape -> {
-                                dismissPopup()
-                                true
-                            }
-                            else -> false
-                        }
-                    },
-                minLines = 8,
-                visualTransformation = referenceHighlight,
-            )
-
-            InsertFromAgentPopup(
-                expanded = showInsertPopup,
-                onDismiss = ::dismissPopup,
-                items = insertItems,
-                selectedIndex = selectedIndex,
-                onInsert = ::performInsert,
-            )
-        }
+        CyberpunkTextField(
+            value = agent.draftMessage,
+            onValueChange = { onAction(UiAction.MessageInputChanged(it)) },
+            label = "// MESSAGE",
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3,
+        )
 
         SubmitButton(
             isLoading = agent.isLoading,
@@ -283,39 +225,71 @@ private fun CenterPromptColumn(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-
-        agent.response?.let { response ->
-            OutputPanel(
-                response = response,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
-        }
     }
 }
 
-private class ReferenceHighlightTransformation : VisualTransformation {
-    private val tokenRegex = Regex("""\[#\d+ (?:prompt|output)\]""")
-
-    override fun filter(text: AnnotatedString): TransformedText {
-        val builder = AnnotatedString.Builder(text)
-        tokenRegex.findAll(text.text).forEach { match ->
-            val color = if ("prompt" in match.value) CyberpunkColors.Yellow else CyberpunkColors.NeonGreen
-            builder.addStyle(
-                SpanStyle(color = color, fontWeight = FontWeight.Bold),
-                match.range.first,
-                match.range.last + 1,
-            )
-        }
-        return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+@Composable
+private fun MessageRow(
+    message: AgentMessageState,
+    onStop: () -> Unit,
+) {
+    val roleColor = when (message.role) {
+        AgentMessageRoleDto.USER -> CyberpunkColors.Yellow
+        AgentMessageRoleDto.ASSISTANT -> CyberpunkColors.NeonGreen
     }
-}
 
-private fun insertContent(content: String, slashPos: Int, current: TextFieldValue): TextFieldValue {
-    val text = current.text
-    val before = text.substring(0, slashPos)
-    val after = text.substring(slashPos + 1)
-    val newText = before + content + after
-    return TextFieldValue(text = newText, selection = TextRange(before.length + content.length))
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "${message.role.name}  [${message.status.uppercase()}]",
+                style = MaterialTheme.typography.labelMedium,
+                color = roleColor,
+            )
+
+            if (message.role == AgentMessageRoleDto.ASSISTANT && message.status.equals("processing", ignoreCase = true)) {
+                Text(
+                    text = "STOP",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = CyberpunkColors.Red,
+                    modifier = Modifier.clickable(onClick = onStop),
+                )
+            }
+        }
+
+        Text(
+            text = message.text.ifBlank { "..." },
+            style = MaterialTheme.typography.bodyMedium,
+            color = CyberpunkColors.TextPrimary,
+        )
+
+        if (message.role == AgentMessageRoleDto.ASSISTANT && message.status.equals("done", ignoreCase = true)) {
+            val provider = message.provider?.uppercase().orEmpty()
+            val model = message.model?.uppercase().orEmpty()
+            if (provider.isNotBlank() || model.isNotBlank()) {
+                Text(
+                    text = "PROVIDER: $provider  //  MODEL: $model",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CyberpunkColors.TextMuted,
+                )
+            }
+            message.usage?.let { usage ->
+                Text(
+                    text = "TOKENS  IN: ${usage.inputTokens}  OUT: ${usage.outputTokens}  TOTAL: ${usage.totalTokens}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CyberpunkColors.Cyan,
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = CyberpunkColors.BorderDark,
+        )
+    }
 }
 
 @Composable

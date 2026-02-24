@@ -6,7 +6,6 @@ data class SelectAgentCommand(
 
 data class UpdateAgentDraftCommand(
     val agentId: String,
-    val prompt: String,
     val model: String,
     val maxOutputTokens: String,
     val temperature: String,
@@ -23,6 +22,12 @@ data class SetAgentStatusCommand(
     val status: String,
 )
 
-data class SubmitAgentCommand(
+data class SendAgentMessageCommand(
     val agentId: String,
+    val text: String,
+)
+
+data class StopAgentMessageCommand(
+    val agentId: String,
+    val messageId: String,
 )

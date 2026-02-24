@@ -29,7 +29,6 @@ data class SelectAgentCommandDto(
 @SerialName("update_agent_draft")
 data class UpdateAgentDraftCommandDto(
     val agentId: String,
-    val prompt: String,
     val model: String,
     val maxOutputTokens: String,
     val temperature: String,
@@ -49,6 +48,22 @@ data class CloseAgentCommandDto(
 @SerialName("submit_agent")
 data class SubmitAgentCommandDto(
     val agentId: String,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("send_agent_message")
+data class SendAgentMessageCommandDto(
+    val agentId: String,
+    val text: String,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("stop_agent_message")
+data class StopAgentMessageCommandDto(
+    val agentId: String,
+    val messageId: String,
     val requestId: String? = null,
 ) : AgentWsClientMessageDto
 

@@ -3,15 +3,18 @@ package io.artemkopan.ai.sharedui.state
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
+import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
 import io.artemkopan.ai.sharedcontract.AgentMode
 import io.artemkopan.ai.sharedcontract.AgentOperationFailedDto
 import io.artemkopan.ai.sharedcontract.AgentStateSnapshotDto
 import io.artemkopan.ai.sharedcontract.AgentStateSnapshotMessageDto
+import io.artemkopan.ai.sharedcontract.AgentWsClientMessageDto
 import io.artemkopan.ai.sharedcontract.AgentWsServerMessageDto
 import io.artemkopan.ai.sharedcontract.CloseAgentCommandDto
 import io.artemkopan.ai.sharedcontract.CreateAgentCommandDto
 import io.artemkopan.ai.sharedcontract.SelectAgentCommandDto
-import io.artemkopan.ai.sharedcontract.SubmitAgentCommandDto
+import io.artemkopan.ai.sharedcontract.SendAgentMessageCommandDto
+import io.artemkopan.ai.sharedcontract.StopAgentMessageCommandDto
 import io.artemkopan.ai.sharedcontract.SubscribeAgentsDto
 import io.artemkopan.ai.sharedcontract.UpdateAgentDraftCommandDto
 import io.artemkopan.ai.sharedui.gateway.AgentGateway
@@ -36,6 +39,18 @@ data class GenerationResult(
     val latencyMs: Long = 0,
 )
 
+data class AgentMessageState(
+    val id: String,
+    val role: AgentMessageRoleDto,
+    val text: String,
+    val status: String,
+    val createdAt: Long,
+    val provider: String? = null,
+    val model: String? = null,
+    val usage: UsageResult? = null,
+    val latencyMs: Long? = null,
+)
+
 data class ErrorPopupState(
     val title: String,
     val message: String,
@@ -46,17 +61,17 @@ data class AgentId(val value: String)
 data class AgentState(
     val id: AgentId,
     val title: String,
-    val prompt: String = "",
     val model: String = "",
     val maxOutputTokens: String = "",
     val temperature: String = "",
     val stopSequences: String = "",
     val agentMode: AgentMode = AgentMode.DEFAULT,
-    val status: String = "Ready",
-    val response: GenerationResult? = null,
+    val status: String = STATUS_DONE,
+    val messages: List<AgentMessageState> = emptyList(),
+    val draftMessage: String = "",
 ) {
     val isLoading: Boolean
-        get() = status.equals("running", ignoreCase = true)
+        get() = messages.any { it.status.equals(STATUS_PROCESSING, ignoreCase = true) }
 }
 
 data class UiState(
@@ -69,13 +84,14 @@ data class UiState(
 )
 
 sealed interface UiAction {
-    data class PromptChanged(val value: String) : UiAction
+    data class MessageInputChanged(val value: String) : UiAction
     data class ModelChanged(val value: String) : UiAction
     data class MaxOutputTokensChanged(val value: String) : UiAction
     data class TemperatureChanged(val value: String) : UiAction
     data class StopSequencesChanged(val value: String) : UiAction
     data class AgentModeChanged(val value: AgentMode) : UiAction
     data object Submit : UiAction
+    data class StopMessage(val messageId: String) : UiAction
     data object DismissError : UiAction
     data object CreateAgent : UiAction
     data class SelectAgent(val agentId: AgentId) : UiAction
@@ -99,13 +115,14 @@ class AppViewModel(
 
     fun onAction(action: UiAction) {
         when (action) {
-            is UiAction.PromptChanged -> handlePromptChanged(action.value)
+            is UiAction.MessageInputChanged -> handleMessageInputChanged(action.value)
             is UiAction.ModelChanged -> handleModelChanged(action.value)
             is UiAction.MaxOutputTokensChanged -> handleMaxOutputTokensChanged(action.value)
             is UiAction.TemperatureChanged -> handleTemperatureChanged(action.value)
             is UiAction.StopSequencesChanged -> handleStopSequencesChanged(action.value)
             is UiAction.AgentModeChanged -> handleAgentModeChanged(action.value)
             is UiAction.Submit -> handleSubmit()
+            is UiAction.StopMessage -> handleStopMessage(action.messageId)
             is UiAction.DismissError -> handleDismissError()
             is UiAction.CreateAgent -> sendCommand { CreateAgentCommandDto() }
             is UiAction.SelectAgent -> sendCommand { SelectAgentCommandDto(agentId = action.agentId.value) }
@@ -156,17 +173,10 @@ class AppViewModel(
         }
     }
 
-    private fun handlePromptChanged(value: String) {
+    private fun handleMessageInputChanged(value: String) {
         updateActiveAgent { current ->
-            val firstLine = value.lineSequence().firstOrNull()?.trim().orEmpty()
-            val newTitle = if (firstLine.isNotEmpty()) {
-                firstLine.take(MAX_TITLE_LENGTH)
-            } else {
-                "Agent ${extractAgentNumber(current.id.value)}"
-            }
-            current.copy(prompt = value, title = newTitle)
+            current.copy(draftMessage = value)
         }
-        sendActiveDraftUpdate()
     }
 
     private fun handleModelChanged(value: String) {
@@ -208,14 +218,33 @@ class AppViewModel(
 
     private fun handleSubmit() {
         val active = getActiveAgent() ?: return
-        if (active.prompt.trim().isBlank()) {
+        val text = active.draftMessage.trim()
+        if (text.isBlank()) {
             showError(
                 title = "Validation Error",
-                message = "Prompt must not be blank.",
+                message = "Message must not be blank.",
             )
             return
         }
-        sendCommand { SubmitAgentCommandDto(agentId = active.id.value) }
+
+        sendCommand {
+            SendAgentMessageCommandDto(
+                agentId = active.id.value,
+                text = text,
+            )
+        }
+
+        updateActiveAgent { it.copy(draftMessage = "") }
+    }
+
+    private fun handleStopMessage(messageId: String) {
+        val active = getActiveAgent() ?: return
+        sendCommand {
+            StopAgentMessageCommandDto(
+                agentId = active.id.value,
+                messageId = messageId,
+            )
+        }
     }
 
     private fun handleDismissError() {
@@ -223,34 +252,40 @@ class AppViewModel(
     }
 
     private fun applySnapshot(snapshot: AgentStateSnapshotDto) {
+        val currentAgents = _state.value.agents
         val order = snapshot.agents.map { AgentId(it.id) }
         val mapped = snapshot.agents.associate { dto ->
             val id = AgentId(dto.id)
+            val preservedDraft = currentAgents[id]?.draftMessage.orEmpty()
             id to AgentState(
                 id = id,
                 title = dto.title,
-                prompt = dto.prompt,
                 model = dto.model,
                 maxOutputTokens = dto.maxOutputTokens,
                 temperature = dto.temperature,
                 stopSequences = dto.stopSequences,
                 agentMode = dto.agentMode,
                 status = dto.status,
-                response = dto.response?.let { response ->
-                    GenerationResult(
-                        text = response.text,
-                        provider = response.provider,
-                        model = response.model,
-                        usage = response.usage?.let {
+                messages = dto.messages.map { message ->
+                    AgentMessageState(
+                        id = message.id,
+                        role = message.role,
+                        text = message.text,
+                        status = message.status,
+                        createdAt = message.createdAt,
+                        provider = message.provider,
+                        model = message.model,
+                        usage = message.usage?.let {
                             UsageResult(
                                 inputTokens = it.inputTokens,
                                 outputTokens = it.outputTokens,
                                 totalTokens = it.totalTokens,
                             )
                         },
-                        latencyMs = response.latencyMs,
+                        latencyMs = message.latencyMs,
                     )
                 },
+                draftMessage = preservedDraft,
             )
         }
 
@@ -269,7 +304,6 @@ class AppViewModel(
         sendCommand {
             UpdateAgentDraftCommandDto(
                 agentId = active.id.value,
-                prompt = active.prompt,
                 model = active.model,
                 maxOutputTokens = active.maxOutputTokens,
                 temperature = active.temperature,
@@ -293,7 +327,7 @@ class AppViewModel(
         return current.agents[activeId]
     }
 
-    private fun sendCommand(message: () -> io.artemkopan.ai.sharedcontract.AgentWsClientMessageDto) {
+    private fun sendCommand(message: () -> AgentWsClientMessageDto) {
         viewModelScope.launch {
             gateway.send(message())
                 .onFailure { throwable ->
@@ -316,15 +350,11 @@ class AppViewModel(
         }
     }
 
-    private fun extractAgentNumber(agentId: String): String {
-        return agentId.substringAfter("agent-", missingDelimiterValue = "")
-            .ifBlank { "" }
-    }
-
     override fun onCleared() {
         gateway.disconnect()
         super.onCleared()
     }
 }
 
-private const val MAX_TITLE_LENGTH = 20
+private const val STATUS_PROCESSING = "processing"
+private const val STATUS_DONE = "done"

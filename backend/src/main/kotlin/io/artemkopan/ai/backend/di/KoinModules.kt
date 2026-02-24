@@ -2,6 +2,8 @@ package io.artemkopan.ai.backend.di
 
 import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.backend.agent.persistence.PostgresAgentRepository
+import io.artemkopan.ai.core.application.usecase.BuildConversationPromptUseCase
+import io.artemkopan.ai.core.application.usecase.CompleteAgentMessageUseCase
 import io.artemkopan.ai.core.application.mapper.DomainErrorMapper
 import io.artemkopan.ai.core.application.usecase.CloseAgentUseCase
 import io.artemkopan.ai.core.application.usecase.CreateAgentUseCase
@@ -12,7 +14,8 @@ import io.artemkopan.ai.core.application.usecase.ResolveAgentModeUseCase
 import io.artemkopan.ai.core.application.usecase.ResolveGenerationOptionsUseCase
 import io.artemkopan.ai.core.application.usecase.SelectAgentUseCase
 import io.artemkopan.ai.core.application.usecase.SetAgentStatusUseCase
-import io.artemkopan.ai.core.application.usecase.SubmitAgentUseCase
+import io.artemkopan.ai.core.application.usecase.StartAgentMessageUseCase
+import io.artemkopan.ai.core.application.usecase.StopAgentMessageUseCase
 import io.artemkopan.ai.core.application.usecase.UpdateAgentDraftUseCase
 import io.artemkopan.ai.core.application.usecase.ValidatePromptUseCase
 import io.artemkopan.ai.core.data.client.GeminiNetworkClient
@@ -99,7 +102,10 @@ val applicationModule = module {
     single { UpdateAgentDraftUseCase(repository = get()) }
     single { CloseAgentUseCase(repository = get()) }
     single { SetAgentStatusUseCase(repository = get()) }
-    single { SubmitAgentUseCase(repository = get(), generateTextUseCase = get()) }
+    single { BuildConversationPromptUseCase() }
+    single { StartAgentMessageUseCase(repository = get(), buildConversationPromptUseCase = get()) }
+    single { CompleteAgentMessageUseCase(repository = get()) }
+    single { StopAgentMessageUseCase(repository = get()) }
     single { MapFailureToUserMessageUseCase() }
 }
 

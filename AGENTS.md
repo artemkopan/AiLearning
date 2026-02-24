@@ -62,6 +62,7 @@ web-host        → Web app entry point (JS), wires shared-ui with HTTP gateway
 - `LlmNetworkClient` interface allows swapping LLM providers (currently Gemini)
 - Value objects wrap primitives in domain layer (`Prompt`, `ModelId`, `Temperature`, `MaxOutputTokens`, `StopSequences`)
 - New generation parameters flow: `DTO → Command → UseCase → GenerationOptions → LlmGenerationInput → NetworkRequest → GeminiGenerationConfig`
+- Do not use fully-qualified class names in code bodies (for example `io.artemkopan...AgentMessageRole`); add imports and use short names
 
 ### Backend DI
 

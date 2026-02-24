@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
 import io.artemkopan.ai.sharedui.state.AgentState
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 
@@ -28,19 +29,20 @@ fun buildInsertItems(otherAgents: List<AgentState>): List<InsertItem> = buildLis
     otherAgents.forEach { agent ->
         val agentNumber = agent.id.value.substringAfter("agent-")
         val displayTitle = if (agentNumber.isNotBlank()) "#$agentNumber: ${agent.title}" else agent.title
-        if (agent.prompt.isNotBlank()) {
+        val latestUser = agent.messages.lastOrNull { it.role == AgentMessageRoleDto.USER }?.text
+        if (!latestUser.isNullOrBlank()) {
             add(
                 InsertItem(
                     agentTitle = displayTitle,
                     label = "PROMPT",
-                    preview = agent.prompt.take(80).replace('\n', ' '),
-                    content = agent.prompt,
+                    preview = latestUser.take(80).replace('\n', ' '),
+                    content = latestUser,
                     token = "[#$agentNumber prompt]",
                     color = CyberpunkColors.Yellow,
                 )
             )
         }
-        val responseText = agent.response?.text
+        val responseText = agent.messages.lastOrNull { it.role == AgentMessageRoleDto.ASSISTANT }?.text
         if (!responseText.isNullOrBlank()) {
             add(
                 InsertItem(

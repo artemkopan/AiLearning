@@ -20,7 +20,6 @@ class UpdateAgentDraftUseCase(
         return repository.updateAgentDraft(
             agentId = AgentId(id),
             draft = AgentDraft(
-                prompt = command.prompt,
                 model = command.model,
                 maxOutputTokens = command.maxOutputTokens,
                 temperature = command.temperature,
