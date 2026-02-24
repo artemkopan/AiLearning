@@ -22,10 +22,14 @@ fun main() {
     Logger.withTag("Startup").i { "Logging initialized" }
     logger.info("Loaded .env files: {}", loadedFiles)
     logger.info(
-        "Loaded config: port={}, geminiModel={}, corsOrigin={}, geminiApiKey={}",
+        "Loaded config: port={}, geminiModel={}, corsOrigin={}, dbHost={}, dbPort={}, dbName={}, dbUser={}, geminiApiKey={}",
         config.port,
         config.defaultModel,
         config.corsOrigin,
+        config.dbHost,
+        config.dbPort,
+        config.dbName,
+        config.dbUser,
         maskSecret(config.geminiApiKey),
     )
 

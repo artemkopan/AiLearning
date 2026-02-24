@@ -2,6 +2,7 @@ package io.artemkopan.ai.backend.di
 
 import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.core.data.client.LlmNetworkClient
+import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.core.domain.repository.LlmRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
@@ -21,6 +22,12 @@ class KoinModulesVerifyTest {
         geminiApiKey = "test-api-key",
         defaultModel = "gemini-2.5-flash",
         corsOrigin = "localhost:8081",
+        dbHost = "localhost",
+        dbPort = 5432,
+        dbName = "ai_learning_test",
+        dbUser = "postgres",
+        dbPassword = "postgres",
+        dbSsl = false,
     )
 
     @Test
@@ -50,6 +57,7 @@ class KoinModulesVerifyTest {
             extraTypes = listOf(
                 AppConfig::class,
                 LlmRepository::class,
+                AgentRepository::class,
             )
         )
     }
@@ -63,6 +71,7 @@ class KoinModulesVerifyTest {
             extraTypes = listOf(
                 HttpClientEngine::class,
                 HttpClientConfig::class,
+                Boolean::class,
             )
         )
     }

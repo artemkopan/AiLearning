@@ -12,11 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.artemkopan.ai.sharedui.state.ChatState
+import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
+import io.artemkopan.ai.sharedui.state.AgentState
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 
 data class InsertItem(
-    val chatTitle: String,
+    val agentTitle: String,
     val label: String,
     val preview: String,
     val content: String,
@@ -24,31 +25,32 @@ data class InsertItem(
     val color: Color,
 )
 
-fun buildInsertItems(otherChats: List<ChatState>): List<InsertItem> = buildList {
-    otherChats.forEach { chat ->
-        val chatNumber = chat.id.value.substringAfter("chat-")
-        val displayTitle = if (chatNumber.isNotBlank()) "#$chatNumber: ${chat.title}" else chat.title
-        if (chat.prompt.isNotBlank()) {
+fun buildInsertItems(otherAgents: List<AgentState>): List<InsertItem> = buildList {
+    otherAgents.forEach { agent ->
+        val agentNumber = agent.id.value.substringAfter("agent-")
+        val displayTitle = if (agentNumber.isNotBlank()) "#$agentNumber: ${agent.title}" else agent.title
+        val latestUser = agent.messages.lastOrNull { it.role == AgentMessageRoleDto.USER }?.text
+        if (!latestUser.isNullOrBlank()) {
             add(
                 InsertItem(
-                    chatTitle = displayTitle,
+                    agentTitle = displayTitle,
                     label = "PROMPT",
-                    preview = chat.prompt.take(80).replace('\n', ' '),
-                    content = chat.prompt,
-                    token = "[#$chatNumber prompt]",
+                    preview = latestUser.take(80).replace('\n', ' '),
+                    content = latestUser,
+                    token = "[#$agentNumber prompt]",
                     color = CyberpunkColors.Yellow,
                 )
             )
         }
-        val responseText = chat.response?.text
+        val responseText = agent.messages.lastOrNull { it.role == AgentMessageRoleDto.ASSISTANT }?.text
         if (!responseText.isNullOrBlank()) {
             add(
                 InsertItem(
-                    chatTitle = displayTitle,
+                    agentTitle = displayTitle,
                     label = "OUTPUT",
                     preview = responseText.take(80).replace('\n', ' '),
                     content = responseText,
-                    token = "[#$chatNumber output]",
+                    token = "[#$agentNumber output]",
                     color = CyberpunkColors.NeonGreen,
                 )
             )
@@ -57,7 +59,7 @@ fun buildInsertItems(otherChats: List<ChatState>): List<InsertItem> = buildList 
 }
 
 @Composable
-fun InsertFromChatPopup(
+fun InsertFromAgentPopup(
     expanded: Boolean,
     onDismiss: () -> Unit,
     items: List<InsertItem>,
@@ -72,7 +74,7 @@ fun InsertFromChatPopup(
     ) {
         // Header
         Text(
-            text = "[ INSERT FROM CHAT ]",
+            text = "[ INSERT FROM AGENT ]",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = CyberpunkColors.Yellow,
@@ -81,7 +83,7 @@ fun InsertFromChatPopup(
 
         if (items.isEmpty()) {
             Text(
-                text = "No other chats available",
+                text = "No other agents available",
                 style = MaterialTheme.typography.bodySmall,
                 color = CyberpunkColors.TextMuted,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -92,7 +94,7 @@ fun InsertFromChatPopup(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            text = "${item.chatTitle} > ${item.label}  ${item.preview}",
+                            text = "${item.agentTitle} > ${item.label}  ${item.preview}",
                             style = MaterialTheme.typography.bodySmall,
                             color = item.color,
                             maxLines = 1,

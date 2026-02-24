@@ -21,50 +21,50 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.artemkopan.ai.sharedui.state.ChatId
-import io.artemkopan.ai.sharedui.state.ChatState
+import io.artemkopan.ai.sharedui.state.AgentId
+import io.artemkopan.ai.sharedui.state.AgentState
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 
 @Composable
-fun ChatSidePanel(
-    chats: List<ChatState>,
-    activeChatId: ChatId?,
-    onChatSelected: (ChatId) -> Unit,
-    onChatClosed: (ChatId) -> Unit,
-    onNewChatClicked: () -> Unit,
+fun AgentSidePanel(
+    agents: List<AgentState>,
+    activeAgentId: AgentId?,
+    onAgentSelected: (AgentId) -> Unit,
+    onAgentClosed: (AgentId) -> Unit,
+    onNewAgentClicked: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val canAddChat = chats.size < 5
-    val canClose = chats.size > 1
+    val canAddAgent = agents.size < 5
+    val canClose = agents.size > 1
 
     CyberpunkPanel(
-        title = "CHATS",
+        title = "AGENTS",
         accentColor = CyberpunkColors.Cyan,
         modifier = modifier,
     ) {
-        chats.forEach { chat ->
-            val isActive = chat.id == activeChatId
-            ChatItem(
-                chat = chat,
+        agents.forEach { agent ->
+            val isActive = agent.id == activeAgentId
+            AgentItem(
+                agent = agent,
                 isActive = isActive,
                 showClose = canClose,
-                onSelect = { onChatSelected(chat.id) },
-                onClose = { onChatClosed(chat.id) },
+                onSelect = { onAgentSelected(agent.id) },
+                onClose = { onAgentClosed(agent.id) },
             )
         }
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        AddChatButton(
-            enabled = canAddChat,
-            onClick = onNewChatClicked,
+        AddAgentButton(
+            enabled = canAddAgent,
+            onClick = onNewAgentClicked,
         )
     }
 }
 
 @Composable
-private fun ChatItem(
-    chat: ChatState,
+private fun AgentItem(
+    agent: AgentState,
     isActive: Boolean,
     showClose: Boolean,
     onSelect: () -> Unit,
@@ -83,7 +83,7 @@ private fun ChatItem(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (chat.isLoading) {
+        if (agent.isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(12.dp),
                 strokeWidth = 1.5.dp,
@@ -91,14 +91,22 @@ private fun ChatItem(
             )
         }
 
-        Text(
-            text = formatChatTitle(chat),
-            style = MaterialTheme.typography.bodySmall,
-            color = textColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = formatAgentTitle(agent),
+                style = MaterialTheme.typography.bodySmall,
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = agent.status.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = CyberpunkColors.TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
 
         if (showClose) {
             Box(
@@ -119,12 +127,12 @@ private fun ChatItem(
 }
 
 @Composable
-private fun AddChatButton(
+private fun AddAgentButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
     val textColor = if (enabled) CyberpunkColors.Cyan else CyberpunkColors.TextMuted
-    val label = if (enabled) "+ NEW CHAT" else "MAX CHATS (5)"
+    val label = if (enabled) "+ NEW AGENT" else "MAX AGENTS (5)"
 
     Column(
         modifier = Modifier
@@ -142,7 +150,7 @@ private fun AddChatButton(
     }
 }
 
-private fun formatChatTitle(chat: ChatState): String {
-    val chatNumber = chat.id.value.substringAfter("chat-", "")
-    return if (chatNumber.isNotBlank()) "#$chatNumber: ${chat.title}" else chat.title
+private fun formatAgentTitle(agent: AgentState): String {
+    val agentNumber = agent.id.value.substringAfter("agent-", "")
+    return if (agentNumber.isNotBlank()) "#$agentNumber: ${agent.title}" else agent.title
 }

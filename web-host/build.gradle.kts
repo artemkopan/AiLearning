@@ -8,7 +8,11 @@ plugins {
 kotlin {
     jvmToolchain(17)
     js {
-        browser()
+        browser {
+            commonWebpackConfig {
+                devServer?.port = 8081
+            }
+        }
         binaries.executable()
     }
 
