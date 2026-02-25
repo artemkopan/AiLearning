@@ -10,7 +10,8 @@ import io.artemkopan.ai.core.domain.repository.AgentRepository
 class UpdateAgentDraftUseCase(
     private val repository: AgentRepository,
 ) {
-    suspend fun execute(command: UpdateAgentDraftCommand): Result<AgentState> {
+    suspend fun execute(userId: String, command: UpdateAgentDraftCommand): Result<AgentState> {
+        val domainUserId = parseUserIdOrError(userId).getOrElse { return Result.failure(it) }
         val id = command.agentId.trim()
         if (id.isEmpty()) {
             return Result.failure(AppError.Validation("Agent id must not be blank."))
@@ -18,6 +19,7 @@ class UpdateAgentDraftUseCase(
 
         val mode = command.agentMode.trim().lowercase().ifEmpty { "default" }
         return repository.updateAgentDraft(
+            userId = domainUserId,
             agentId = AgentId(id),
             draft = AgentDraft(
                 model = command.model,

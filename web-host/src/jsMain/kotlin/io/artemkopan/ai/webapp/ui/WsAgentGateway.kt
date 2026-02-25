@@ -13,8 +13,10 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.await
 import kotlinx.serialization.json.Json
 import org.w3c.dom.WebSocket
+import kotlin.js.Date
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.random.Random
 
 class WsAgentGateway(
     private val backendBaseUrl: String,
@@ -31,6 +33,7 @@ class WsAgentGateway(
     }
 
     override val events: Flow<AgentWsServerMessageDto> = _events.asSharedFlow()
+    private val userScope: String = resolveUserScope()
 
     override suspend fun getConfig(): Result<AgentConfigDto> {
         log.d { "Fetching agent config" }
@@ -120,7 +123,22 @@ class WsAgentGateway(
             base.startsWith("https://") -> base.replaceFirst("https://", "wss://")
             base.startsWith("http://") -> base.replaceFirst("http://", "ws://")
             else -> "ws://$base"
-        } + "/api/v1/agents/ws"
+        } + "/api/v1/agents/ws?userId=$userScope"
+    }
+
+    private fun resolveUserScope(): String {
+        val storageKey = "ai-learning-user-scope"
+        val existing = window.localStorage.getItem(storageKey)?.trim().orEmpty()
+        if (existing.isNotEmpty()) return existing
+
+        val generated = buildString {
+            append("web-")
+            append((Date.now().toLong() and 0xffff).toString(16))
+            append("-")
+            append(Random.nextInt().toUInt().toString(16))
+        }
+        window.localStorage.setItem(storageKey, generated)
+        return generated
     }
 }
 

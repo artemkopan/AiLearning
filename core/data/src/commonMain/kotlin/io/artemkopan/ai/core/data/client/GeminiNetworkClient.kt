@@ -9,6 +9,7 @@ import io.ktor.client.plugins.ServerResponseException
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -26,6 +27,10 @@ class GeminiNetworkClient(
     private val requestJson = Json {
         explicitNulls = false
         encodeDefaults = false
+    }
+    private val responseJson = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
     }
 
     override suspend fun generate(request: NetworkGenerateRequest): Result<NetworkGenerateResponse> {
@@ -99,6 +104,7 @@ class GeminiNetworkClient(
                 is DataError -> throwable
                 is ClientRequestException -> when (throwable.response.status) {
                     HttpStatusCode.TooManyRequests -> DataError.RateLimitError("Provider rate limit exceeded.", throwable)
+                    HttpStatusCode.NotFound -> DataError.NetworkError("Model '${request.model}' was not found.", throwable)
                     HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden ->
                         DataError.AuthenticationError("Provider authentication failed.", throwable)
                     else -> DataError.NetworkError("Provider call failed: ${throwable.response.status}.", throwable)
@@ -108,6 +114,78 @@ class GeminiNetworkClient(
             }
             log.e(throwable) {
                 "Generation failed: model=${request.model}, latencyMs=$latencyMs, error=${mappedError.message}"
+            }
+            throw mappedError
+        }
+    }
+
+    override suspend fun embed(request: NetworkEmbedRequest): Result<NetworkEmbedResponse> {
+        if (apiKey.isBlank()) {
+            log.e { "API key is missing" }
+            return Result.failure(DataError.AuthenticationError("Missing GEMINI_API_KEY configuration."))
+        }
+
+        val text = request.text.trim()
+        if (text.isEmpty()) {
+            return Result.failure(DataError.EmptyResponseError("Embedding input is blank."))
+        }
+
+        log.d { "Starting embedding request: model=${request.model}, textLength=${text.length}" }
+        val startTime = currentTimeMillis()
+
+        return runCatching {
+            val endpoint = "$baseUrl/models/${request.model}:embedContent"
+            val requestBody = GeminiEmbedRequest(
+                content = GeminiContent(parts = listOf(GeminiPart(text = text))),
+            )
+
+            val httpResponse = httpClient.post(endpoint) {
+                header("x-goog-api-key", apiKey)
+                contentType(ContentType.Application.Json)
+                setBody(requestBody)
+            }
+            val rawBody = httpResponse.bodyAsText()
+            val response = responseJson.decodeFromString(GeminiEmbedResponse.serializer(), rawBody)
+
+            val values = response.embedding?.values.orEmpty()
+                .ifEmpty { response.embeddings?.firstOrNull()?.values.orEmpty() }
+            if (values.isEmpty()) {
+                log.w {
+                    "Embedding response had no vector values: model=${request.model}, body=${rawBody.take(500)}"
+                }
+                throw DataError.EmptyResponseError("Provider returned an empty embedding.")
+            }
+
+            val latencyMs = currentTimeMillis() - startTime
+            log.i {
+                "Embedding completed: model=${request.model}, latencyMs=$latencyMs, vectorSize=${values.size}"
+            }
+
+            NetworkEmbedResponse(
+                values = values,
+                provider = "gemini",
+                model = request.model,
+            )
+        }.recoverCatching { throwable ->
+            val latencyMs = currentTimeMillis() - startTime
+            val mappedError = when (throwable) {
+                is DataError -> throwable
+                is ClientRequestException -> when (throwable.response.status) {
+                    HttpStatusCode.TooManyRequests -> DataError.RateLimitError("Provider rate limit exceeded.", throwable)
+                    HttpStatusCode.NotFound -> DataError.NetworkError(
+                        "Embedding model '${request.model}' is not available for Gemini API v1beta embedContent. " +
+                            "Set CONTEXT_EMBEDDING_MODEL=gemini-embedding-001 or another supported model.",
+                        throwable,
+                    )
+                    HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden ->
+                        DataError.AuthenticationError("Provider authentication failed.", throwable)
+                    else -> DataError.NetworkError("Provider call failed: ${throwable.response.status}.", throwable)
+                }
+                is ServerResponseException -> DataError.NetworkError("Provider server error: ${throwable.response.status}.", throwable)
+                else -> DataError.NetworkError("Provider call failed.", throwable)
+            }
+            log.e(throwable) {
+                "Embedding failed: model=${request.model}, latencyMs=$latencyMs, error=${mappedError.message}"
             }
             throw mappedError
         }
@@ -180,4 +258,20 @@ private data class GeminiUsageMetadata(
     val promptTokenCount: Int? = null,
     val candidatesTokenCount: Int? = null,
     val totalTokenCount: Int? = null,
+)
+
+@Serializable
+private data class GeminiEmbedRequest(
+    val content: GeminiContent,
+)
+
+@Serializable
+private data class GeminiEmbedResponse(
+    val embedding: GeminiEmbedding? = null,
+    val embeddings: List<GeminiEmbedding>? = null,
+)
+
+@Serializable
+private data class GeminiEmbedding(
+    val values: List<Double> = emptyList(),
 )

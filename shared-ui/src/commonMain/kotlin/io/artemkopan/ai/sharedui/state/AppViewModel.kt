@@ -67,6 +67,8 @@ data class AgentState(
     val stopSequences: String = "",
     val agentMode: AgentMode = AgentMode.DEFAULT,
     val status: String = STATUS_DONE,
+    val contextSummary: String = "",
+    val summarizedUntilCreatedAt: Long = 0,
     val messages: List<AgentMessageState> = emptyList(),
     val draftMessage: String = "",
 ) {
@@ -266,6 +268,8 @@ class AppViewModel(
                 stopSequences = dto.stopSequences,
                 agentMode = dto.agentMode,
                 status = dto.status,
+                contextSummary = dto.contextSummary,
+                summarizedUntilCreatedAt = dto.summarizedUntilCreatedAt,
                 messages = dto.messages.map { message ->
                     AgentMessageState(
                         id = message.id,

@@ -62,9 +62,9 @@ class AgentWsMessageHandler(
     private val processingJobs = mutableMapOf<String, ProcessingJob>()
     private val jobsMutex = Mutex()
 
-    suspend fun onConnected(session: DefaultWebSocketServerSession) {
-        sessionRegistry.register(session)
-        getAgentStateUseCase.execute()
+    suspend fun onConnected(userScope: String, session: DefaultWebSocketServerSession) {
+        sessionRegistry.register(userScope, session)
+        getAgentStateUseCase.execute(userScope)
             .onSuccess { state -> sendSnapshot(session, state) }
             .onFailure { throwable -> sendError(session, throwable.message ?: "Failed to load state", null) }
     }
@@ -73,7 +73,7 @@ class AgentWsMessageHandler(
         sessionRegistry.unregister(session)
     }
 
-    suspend fun onTextMessage(session: DefaultWebSocketServerSession, text: String) {
+    suspend fun onTextMessage(userScope: String, session: DefaultWebSocketServerSession, text: String) {
         val parsed = runCatching {
             json.decodeFromString(AgentWsClientMessageDto.serializer(), text)
         }.getOrElse { throwable ->
@@ -84,25 +84,26 @@ class AgentWsMessageHandler(
 
         when (parsed) {
             is SubscribeAgentsDto -> {
-                getAgentStateUseCase.execute()
+                getAgentStateUseCase.execute(userScope)
                     .onSuccess { state -> sendSnapshot(session, state) }
                     .onFailure { throwable -> sendError(session, throwable.message ?: "Failed to load state", parsed.requestId) }
             }
 
             is CreateAgentCommandDto -> {
-                createAgentUseCase.execute()
-                    .onSuccess { state -> broadcastSnapshot(state) }
+                createAgentUseCase.execute(userScope)
+                    .onSuccess { state -> broadcastSnapshot(userScope, state) }
                     .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
             }
 
             is SelectAgentCommandDto -> {
-                selectAgentUseCase.execute(SelectAgentCommand(parsed.agentId))
-                    .onSuccess { state -> broadcastSnapshot(state) }
+                selectAgentUseCase.execute(userScope, SelectAgentCommand(parsed.agentId))
+                    .onSuccess { state -> broadcastSnapshot(userScope, state) }
                     .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
             }
 
             is UpdateAgentDraftCommandDto -> {
                 updateAgentDraftUseCase.execute(
+                    userScope,
                     UpdateAgentDraftCommand(
                         agentId = parsed.agentId,
                         model = parsed.model,
@@ -112,65 +113,72 @@ class AgentWsMessageHandler(
                         agentMode = parsed.agentMode.name.lowercase(),
                     )
                 )
-                    .onSuccess { state -> broadcastSnapshot(state) }
+                    .onSuccess { state -> broadcastSnapshot(userScope, state) }
                     .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
             }
 
             is CloseAgentCommandDto -> {
-                closeAgentUseCase.execute(CloseAgentCommand(parsed.agentId))
-                    .onSuccess { state -> broadcastSnapshot(state) }
+                closeAgentUseCase.execute(userScope, CloseAgentCommand(parsed.agentId))
+                    .onSuccess { state -> broadcastSnapshot(userScope, state) }
                     .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
             }
 
             is SendAgentMessageCommandDto -> {
-                if (isAgentBusy(parsed.agentId)) {
+                if (isAgentBusy(userScope, parsed.agentId)) {
                     sendError(session, "This agent already has a processing message.", parsed.requestId)
                     return
                 }
 
                 startAgentMessageUseCase.execute(
+                    userScope,
                     SendAgentMessageCommand(
                         agentId = parsed.agentId,
                         text = parsed.text,
                     )
                 )
                     .onSuccess { started ->
-                        broadcastSnapshot(started.state)
+                        broadcastSnapshot(userScope, started.state)
 
                         val job = wsScope.launch {
                             try {
+                                val startedAt = System.currentTimeMillis()
                                 val generation = generateTextUseCase.execute(started.generateCommand)
+                                val latencyMs = System.currentTimeMillis() - startedAt
                                 generation
                                     .onSuccess { output ->
                                         completeAgentMessageUseCase.execute(
+                                            userScope,
                                             CompleteAgentMessageCommand(
                                                 agentId = started.agentId.value,
                                                 messageId = started.messageId.value,
                                                 output = output,
+                                                latencyMs = latencyMs,
                                             )
                                         )
-                                            .onSuccess { state -> broadcastSnapshot(state) }
+                                            .onSuccess { state -> broadcastSnapshot(userScope, state) }
                                             .onFailure { throwable ->
                                                 sendOperationFailure(session, throwable, parsed.requestId)
                                             }
                                     }
                                     .onFailure { throwable ->
-                                        if (!isStopRequested(started.agentId.value, started.messageId.value)) {
+                                        if (!isStopRequested(userScope, started.agentId.value, started.messageId.value)) {
                                             stopAgentMessageUseCase.execute(
+                                                userScope,
                                                 StopAgentMessageCommand(
                                                     agentId = started.agentId.value,
                                                     messageId = started.messageId.value,
                                                 )
-                                            ).onSuccess { state -> broadcastSnapshot(state) }
+                                            ).onSuccess { state -> broadcastSnapshot(userScope, state) }
                                             sendOperationFailure(session, throwable, parsed.requestId)
                                         }
                                     }
                             } finally {
-                                clearProcessing(started.agentId.value, started.messageId.value)
+                                clearProcessing(userScope, started.agentId.value, started.messageId.value)
                             }
                         }
 
                         registerProcessing(
+                            userScope = userScope,
                             agentId = started.agentId.value,
                             messageId = started.messageId.value,
                             job = job,
@@ -180,14 +188,15 @@ class AgentWsMessageHandler(
             }
 
             is StopAgentMessageCommandDto -> {
-                requestStop(parsed.agentId, parsed.messageId)
+                requestStop(userScope, parsed.agentId, parsed.messageId)
                 stopAgentMessageUseCase.execute(
+                    userScope,
                     StopAgentMessageCommand(
                         agentId = parsed.agentId,
                         messageId = parsed.messageId,
                     )
                 )
-                    .onSuccess { state -> broadcastSnapshot(state) }
+                    .onSuccess { state -> broadcastSnapshot(userScope, state) }
                     .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
             }
 
@@ -213,9 +222,12 @@ class AgentWsMessageHandler(
         )
     }
 
-    private suspend fun broadcastSnapshot(state: AgentState) {
+    private suspend fun broadcastSnapshot(userScope: String, state: AgentState) {
         val payload = mapper.toSnapshotMessage(state)
-        sessionRegistry.broadcast(json.encodeToString(AgentWsServerMessageDto.serializer(), payload))
+        sessionRegistry.broadcast(
+            userScope = userScope,
+            text = json.encodeToString(AgentWsServerMessageDto.serializer(), payload),
+        )
     }
 
     private suspend fun sendOperationFailure(
@@ -245,13 +257,13 @@ class AgentWsMessageHandler(
         )
     }
 
-    private suspend fun isAgentBusy(agentId: String): Boolean {
-        return jobsMutex.withLock { processingJobs[agentId] != null }
+    private suspend fun isAgentBusy(userScope: String, agentId: String): Boolean {
+        return jobsMutex.withLock { processingJobs[jobKey(userScope, agentId)] != null }
     }
 
-    private suspend fun registerProcessing(agentId: String, messageId: String, job: Job) {
+    private suspend fun registerProcessing(userScope: String, agentId: String, messageId: String, job: Job) {
         jobsMutex.withLock {
-            processingJobs[agentId] = ProcessingJob(
+            processingJobs[jobKey(userScope, agentId)] = ProcessingJob(
                 messageId = messageId,
                 job = job,
                 stopRequested = false,
@@ -259,9 +271,9 @@ class AgentWsMessageHandler(
         }
     }
 
-    private suspend fun requestStop(agentId: String, messageId: String) {
+    private suspend fun requestStop(userScope: String, agentId: String, messageId: String) {
         val job = jobsMutex.withLock {
-            val current = processingJobs[agentId] ?: return@withLock null
+            val current = processingJobs[jobKey(userScope, agentId)] ?: return@withLock null
             if (current.messageId != messageId) return@withLock null
             current.stopRequested = true
             current.job
@@ -269,21 +281,23 @@ class AgentWsMessageHandler(
         job?.cancel()
     }
 
-    private suspend fun isStopRequested(agentId: String, messageId: String): Boolean {
+    private suspend fun isStopRequested(userScope: String, agentId: String, messageId: String): Boolean {
         return jobsMutex.withLock {
-            val current = processingJobs[agentId] ?: return@withLock false
+            val current = processingJobs[jobKey(userScope, agentId)] ?: return@withLock false
             current.messageId == messageId && current.stopRequested
         }
     }
 
-    private suspend fun clearProcessing(agentId: String, messageId: String) {
+    private suspend fun clearProcessing(userScope: String, agentId: String, messageId: String) {
         jobsMutex.withLock {
-            val current = processingJobs[agentId] ?: return@withLock
+            val current = processingJobs[jobKey(userScope, agentId)] ?: return@withLock
             if (current.messageId == messageId) {
-                processingJobs.remove(agentId)
+                processingJobs.remove(jobKey(userScope, agentId))
             }
         }
     }
+
+    private fun jobKey(userScope: String, agentId: String): String = "$userScope::$agentId"
 }
 
 private data class ProcessingJob(

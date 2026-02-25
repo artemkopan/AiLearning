@@ -9,10 +9,12 @@ import io.artemkopan.ai.core.domain.repository.AgentRepository
 class StopAgentMessageUseCase(
     private val repository: AgentRepository,
 ) {
-    suspend fun execute(command: StopAgentMessageCommand): Result<AgentState> {
+    suspend fun execute(userId: String, command: StopAgentMessageCommand): Result<AgentState> {
+        val domainUserId = parseUserIdOrError(userId).getOrElse { return Result.failure(it) }
         val agentId = parseAgentIdOrError(command.agentId).getOrElse { return Result.failure(it) }
         val messageId = parseMessageIdOrError(command.messageId).getOrElse { return Result.failure(it) }
         val message = repository.findMessage(
+            userId = domainUserId,
             agentId = agentId,
             messageId = messageId,
         ).getOrElse { return Result.failure(it) }
@@ -23,12 +25,13 @@ class StopAgentMessageUseCase(
         }
 
         repository.updateMessage(
+            userId = domainUserId,
             agentId = agentId,
             messageId = message.id,
             status = STATUS_STOPPED,
         ).getOrElse { return Result.failure(it) }
 
-        return repository.updateAgentStatus(agentId, AgentStatus(STATUS_STOPPED))
+        return repository.updateAgentStatus(domainUserId, agentId, AgentStatus(STATUS_STOPPED))
     }
 }
 

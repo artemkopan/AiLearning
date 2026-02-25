@@ -9,11 +9,12 @@ import io.artemkopan.ai.core.domain.repository.AgentRepository
 class SelectAgentUseCase(
     private val repository: AgentRepository,
 ) {
-    suspend fun execute(command: SelectAgentCommand): Result<AgentState> {
+    suspend fun execute(userId: String, command: SelectAgentCommand): Result<AgentState> {
+        val domainUserId = parseUserIdOrError(userId).getOrElse { return Result.failure(it) }
         val id = command.agentId.trim()
         if (id.isEmpty()) {
             return Result.failure(AppError.Validation("Agent id must not be blank."))
         }
-        return repository.selectAgent(AgentId(id))
+        return repository.selectAgent(domainUserId, AgentId(id))
     }
 }

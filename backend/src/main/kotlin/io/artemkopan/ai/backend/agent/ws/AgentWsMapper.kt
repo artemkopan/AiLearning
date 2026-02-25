@@ -24,6 +24,8 @@ class AgentWsMapper {
                         stopSequences = agent.stopSequences,
                         agentMode = parseAgentMode(agent.agentMode),
                         status = agent.status.value,
+                        contextSummary = agent.contextSummary,
+                        summarizedUntilCreatedAt = agent.summarizedUntilCreatedAt,
                         messages = agent.messages.map { message ->
                             AgentMessageDto(
                                 id = message.id.value,

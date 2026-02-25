@@ -8,11 +8,12 @@ class CreateAgentUseCase(
     private val repository: AgentRepository,
     private val maxAgents: Int = 5,
 ) {
-    suspend fun execute(): Result<AgentState> {
-        val currentState = repository.getState().getOrElse { return Result.failure(it) }
+    suspend fun execute(userId: String): Result<AgentState> {
+        val domainUserId = parseUserIdOrError(userId).getOrElse { return Result.failure(it) }
+        val currentState = repository.getState(domainUserId).getOrElse { return Result.failure(it) }
         if (currentState.agents.size >= maxAgents) {
             return Result.failure(AppError.Validation("Cannot create more than $maxAgents agents."))
         }
-        return repository.createAgent()
+        return repository.createAgent(domainUserId)
     }
 }

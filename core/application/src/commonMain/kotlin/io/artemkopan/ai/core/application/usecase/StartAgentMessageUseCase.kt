@@ -21,9 +21,13 @@ data class StartedAgentMessage(
 
 class StartAgentMessageUseCase(
     private val repository: AgentRepository,
-    private val buildConversationPromptUseCase: BuildConversationPromptUseCase,
+    private val maybeSummarizeContextUseCase: MaybeSummarizeContextUseCase,
+    private val buildContextPromptUseCase: BuildContextPromptUseCase,
+    private val retrieveRelevantContextUseCase: RetrieveRelevantContextUseCase,
+    private val indexMessageEmbeddingsUseCase: IndexMessageEmbeddingsUseCase,
 ) {
-    suspend fun execute(command: SendAgentMessageCommand): Result<StartedAgentMessage> {
+    suspend fun execute(userId: String, command: SendAgentMessageCommand): Result<StartedAgentMessage> {
+        val domainUserId = parseUserIdOrError(userId).getOrElse { return Result.failure(it) }
         val agentId = parseAgentIdOrError(command.agentId).getOrElse { return Result.failure(it) }
 
         val text = command.text.trim()
@@ -31,12 +35,12 @@ class StartAgentMessageUseCase(
             return Result.failure(AppError.Validation("Message text must not be blank."))
         }
 
-        val hasProcessing = repository.hasProcessingMessage(agentId).getOrElse { return Result.failure(it) }
+        val hasProcessing = repository.hasProcessingMessage(domainUserId, agentId).getOrElse { return Result.failure(it) }
         if (hasProcessing) {
             return Result.failure(AppError.Validation("This agent already has a processing message."))
         }
 
-        val state = repository.getState().getOrElse { return Result.failure(it) }
+        val state = repository.getState(domainUserId).getOrElse { return Result.failure(it) }
         val agent = state.agents.firstOrNull { it.id == agentId }
             ?: return Result.failure(AppError.Validation("Agent not found: ${command.agentId}"))
 
@@ -56,20 +60,45 @@ class StartAgentMessageUseCase(
             createdAt = 0L,
         )
 
-        val afterUser = repository.appendMessage(agentId, userMessage).getOrElse { return Result.failure(it) }
-        repository.appendMessage(agentId, assistantPlaceholder).getOrElse { return Result.failure(it) }
-        val afterStatus = repository.updateAgentStatus(agentId, AgentStatus(STATUS_PROCESSING))
+        val afterUser = repository.appendMessage(domainUserId, agentId, userMessage).getOrElse { return Result.failure(it) }
+        repository.appendMessage(domainUserId, agentId, assistantPlaceholder).getOrElse { return Result.failure(it) }
+        repository.updateAgentStatus(domainUserId, agentId, AgentStatus(STATUS_PROCESSING))
             .getOrElse { return Result.failure(it) }
 
         val latestAgent = afterUser.agents.firstOrNull { it.id == agentId } ?: agent
-        val conversationPrompt = buildConversationPromptUseCase.execute(latestAgent.messages)
+        val persistedUserMessage = latestAgent.messages.firstOrNull { it.id == userMessage.id } ?: userMessage
+        val preparedContext = maybeSummarizeContextUseCase.execute(domainUserId, latestAgent).getOrElse {
+            return Result.failure(it)
+        }
+        val retrievedMemory = retrieveRelevantContextUseCase.execute(
+            userId = domainUserId,
+            agentId = agentId,
+            queryText = text,
+        ).getOrElse {
+            return Result.failure(it)
+        }
+        val conversationPrompt = buildContextPromptUseCase.execute(
+            summary = preparedContext.summaryText,
+            messages = preparedContext.recentMessages,
+            retrievedMemory = retrievedMemory,
+        )
         if (conversationPrompt.isBlank()) {
             return Result.failure(AppError.Validation("Conversation context is empty."))
         }
 
+        indexMessageEmbeddingsUseCase.execute(
+            userId = domainUserId,
+            agentId = agentId,
+            messageId = persistedUserMessage.id,
+            text = persistedUserMessage.text,
+            createdAt = persistedUserMessage.createdAt,
+        ).getOrElse { return Result.failure(it) }
+
+        val finalState = repository.getState(domainUserId).getOrElse { return Result.failure(it) }
+
         return Result.success(
             StartedAgentMessage(
-                state = afterStatus,
+                state = finalState,
                 agentId = agentId,
                 messageId = assistantPlaceholderId,
                 generateCommand = GenerateCommand(

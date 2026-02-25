@@ -152,12 +152,33 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
                 HttpStatusCode.OK,
                 AgentConfigDto(
                     models = listOf(
-                        ModelOptionDto(id = "gemini-3-flash-preview", name = "Gemini 3 Flash Preview", provider = "gemini"),
-                        ModelOptionDto(id = "gemini-2.5-flash", name = "Gemini 2.5 Flash", provider = "gemini"),
-                        ModelOptionDto(id = "gemini-2.5-flash-lite", name = "Gemini 2.5 Flash Lite", provider = "gemini"),
-                        ModelOptionDto(id = "gemini-flash-latest", name = "Gemini Flash Latest", provider = "gemini"),
+                        ModelOptionDto(
+                            id = "gemini-3-flash-preview",
+                            name = "Gemini 3 Flash Preview",
+                            provider = "gemini",
+                            contextWindowTokens = config.defaultContextWindowTokens,
+                        ),
+                        ModelOptionDto(
+                            id = "gemini-2.5-flash",
+                            name = "Gemini 2.5 Flash",
+                            provider = "gemini",
+                            contextWindowTokens = config.defaultContextWindowTokens,
+                        ),
+                        ModelOptionDto(
+                            id = "gemini-2.5-flash-lite",
+                            name = "Gemini 2.5 Flash Lite",
+                            provider = "gemini",
+                            contextWindowTokens = config.defaultContextWindowTokens,
+                        ),
+                        ModelOptionDto(
+                            id = "gemini-flash-latest",
+                            name = "Gemini Flash Latest",
+                            provider = "gemini",
+                            contextWindowTokens = config.defaultContextWindowTokens,
+                        ),
                     ),
                     defaultModel = config.defaultModel,
+                    defaultContextWindowTokens = config.defaultContextWindowTokens,
                     temperatureMin = 0.0,
                     temperatureMax = 2.0,
                     defaultTemperature = 0.7,
@@ -166,11 +187,12 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         }
 
         webSocket("/api/v1/agents/ws") {
-            wsHandler.onConnected(this)
+            val userScope = call.resolveUserScope()
+            wsHandler.onConnected(userScope, this)
             try {
                 for (frame in incoming) {
                     if (frame is Frame.Text) {
-                        wsHandler.onTextMessage(this, frame.readText())
+                        wsHandler.onTextMessage(userScope, this, frame.readText())
                     }
                 }
             } finally {
@@ -251,4 +273,19 @@ private fun io.ktor.server.application.ApplicationCall.ensureRequestId(): String
     val newId = UUID.randomUUID().toString()
     attributes.put(RequestIdKey, newId)
     return newId
+}
+
+private fun io.ktor.server.application.ApplicationCall.resolveUserScope(): String {
+    val raw = request.queryParameters["userId"]
+        ?: request.headers["X-User-Id"]
+        ?: "anonymous"
+
+    val normalized = raw
+        .trim()
+        .lowercase()
+        .replace(Regex("[^a-z0-9._-]"), "-")
+        .take(64)
+        .trim('-')
+
+    return normalized.ifBlank { "anonymous" }
 }

@@ -45,6 +45,7 @@ import io.artemkopan.ai.sharedui.ui.component.StatusPanel
 import io.artemkopan.ai.sharedui.ui.component.SubmitButton
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkTheme
+import kotlin.math.max
 
 @Composable
 fun AiAssistantScreen(
@@ -133,7 +134,7 @@ private fun AiAssistantContent(
 private fun ScreenHeader() {
     Column {
         Text(
-            text = "AI ASSISTANT",
+            text = "AI assistant",
             style = MaterialTheme.typography.headlineSmall,
             color = CyberpunkColors.Yellow,
         )
@@ -244,7 +245,7 @@ private fun MessageRow(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "${message.role.name}  [${message.status.uppercase()}]",
+                text = "${message.role.name.lowercase()}  [${message.status}]",
                 style = MaterialTheme.typography.labelMedium,
                 color = roleColor,
             )
@@ -266,20 +267,27 @@ private fun MessageRow(
         )
 
         if (message.role == AgentMessageRoleDto.ASSISTANT && message.status.equals("done", ignoreCase = true)) {
-            val provider = message.provider?.uppercase().orEmpty()
-            val model = message.model?.uppercase().orEmpty()
+            val provider = message.provider.orEmpty()
+            val model = message.model.orEmpty()
             if (provider.isNotBlank() || model.isNotBlank()) {
                 Text(
-                    text = "PROVIDER: $provider  //  MODEL: $model",
+                    text = "provider: $provider  //  model: $model",
                     style = MaterialTheme.typography.bodySmall,
                     color = CyberpunkColors.TextMuted,
                 )
             }
             message.usage?.let { usage ->
                 Text(
-                    text = "TOKENS  IN: ${usage.inputTokens}  OUT: ${usage.outputTokens}  TOTAL: ${usage.totalTokens}",
+                    text = "tokens  in: ${usage.inputTokens}  out: ${usage.outputTokens}  total: ${usage.totalTokens}",
                     style = MaterialTheme.typography.bodySmall,
                     color = CyberpunkColors.Cyan,
+                )
+            }
+            message.latencyMs?.let { latencyMs ->
+                Text(
+                    text = "api duration: ${latencyMs} ms",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CyberpunkColors.TextMuted,
                 )
             }
         }
@@ -324,5 +332,74 @@ private fun SettingsColumn(
             } ?: "0.0 – 2.0",
             modifier = Modifier.fillMaxWidth(),
         )
+
+        RuntimeInfoPanel(
+            agent = agent,
+            agentConfig = agentConfig,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
+}
+
+@Composable
+private fun RuntimeInfoPanel(
+    agent: AgentState,
+    agentConfig: AgentConfigDto?,
+    modifier: Modifier = Modifier,
+) {
+    val latestAssistant = agent.messages.lastOrNull {
+        it.role == AgentMessageRoleDto.ASSISTANT && it.status.equals("done", ignoreCase = true)
+    }
+    val contextUsed = estimateContextTokens(agent)
+    val contextWindow = resolveContextWindowTokens(agent, agentConfig)
+    val contextLeft = contextWindow?.let { max(it - contextUsed, 0) }
+
+    CyberpunkPanel(
+        title = "RUNTIME",
+        accentColor = CyberpunkColors.Cyan,
+        modifier = modifier,
+    ) {
+        Text(
+            text = "out tokens: ${latestAssistant?.usage?.outputTokens?.toString() ?: "n/a"}",
+            style = MaterialTheme.typography.bodySmall,
+            color = CyberpunkColors.Cyan,
+        )
+        Text(
+            text = "context left: ${contextLeft?.toString() ?: "n/a"}",
+            style = MaterialTheme.typography.bodySmall,
+            color = CyberpunkColors.TextPrimary,
+        )
+        Text(
+            text = "api duration: ${latestAssistant?.latencyMs?.let { "$it ms" } ?: "n/a"}",
+            style = MaterialTheme.typography.bodySmall,
+            color = CyberpunkColors.TextMuted,
+        )
+    }
+}
+
+private fun resolveContextWindowTokens(
+    agent: AgentState,
+    agentConfig: AgentConfigDto?,
+): Int? {
+    if (agentConfig == null) return null
+
+    val selectedModelId = agent.model.ifBlank { agentConfig.defaultModel }
+    return agentConfig.models.firstOrNull { it.id == selectedModelId }?.contextWindowTokens
+        ?: agentConfig.defaultContextWindowTokens
+}
+
+private fun estimateContextTokens(agent: AgentState): Int {
+    val summaryTokens = estimateTokens(agent.contextSummary)
+    val recentMessages = agent.messages
+        .filter { !it.status.equals("stopped", ignoreCase = true) }
+        .filter { it.createdAt > agent.summarizedUntilCreatedAt }
+    val messageTokens = recentMessages.sumOf { message ->
+        estimateTokens(message.text) + 4
+    }
+    return summaryTokens + messageTokens + 64
+}
+
+private fun estimateTokens(text: String): Int {
+    if (text.isBlank()) return 0
+    return (text.length + 3) / 4
 }

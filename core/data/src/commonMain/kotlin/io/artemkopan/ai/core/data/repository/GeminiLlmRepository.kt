@@ -1,9 +1,11 @@
 package io.artemkopan.ai.core.data.repository
 
 import io.artemkopan.ai.core.data.client.LlmNetworkClient
+import io.artemkopan.ai.core.data.client.NetworkEmbedRequest
 import io.artemkopan.ai.core.data.client.NetworkGenerateRequest
 import io.artemkopan.ai.core.data.error.DataError
 import io.artemkopan.ai.core.domain.error.DomainError
+import io.artemkopan.ai.core.domain.model.LlmEmbedding
 import io.artemkopan.ai.core.domain.model.LlmGeneration
 import io.artemkopan.ai.core.domain.model.LlmGenerationInput
 import io.artemkopan.ai.core.domain.model.TokenUsage
@@ -44,6 +46,26 @@ class GeminiLlmRepository(
             )
         }.recoverCatching { throwable ->
             log.e(throwable) { "Repository generate failed" }
+            throw mapToDomainError(throwable)
+        }
+    }
+
+    override suspend fun embed(text: String, model: String): Result<LlmEmbedding> {
+        log.d { "Repository embed called: model=$model, textLength=${text.length}" }
+
+        return networkClient.embed(
+            NetworkEmbedRequest(
+                text = text,
+                model = model,
+            )
+        ).map { response ->
+            LlmEmbedding(
+                values = response.values,
+                model = response.model,
+                provider = response.provider,
+            )
+        }.recoverCatching { throwable ->
+            log.e(throwable) { "Repository embed failed" }
             throw mapToDomainError(throwable)
         }
     }

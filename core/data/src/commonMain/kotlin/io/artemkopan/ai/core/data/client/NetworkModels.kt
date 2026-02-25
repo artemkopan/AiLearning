@@ -21,3 +21,14 @@ data class NetworkGenerateResponse(
     val model: String,
     val usage: NetworkTokenUsage?,
 )
+
+data class NetworkEmbedRequest(
+    val text: String,
+    val model: String,
+)
+
+data class NetworkEmbedResponse(
+    val values: List<Double>,
+    val provider: String,
+    val model: String,
+)

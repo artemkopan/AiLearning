@@ -41,12 +41,14 @@ data class ModelOptionDto(
     val id: String,
     val name: String,
     val provider: String,
+    val contextWindowTokens: Int,
 )
 
 @Serializable
 data class AgentConfigDto(
     val models: List<ModelOptionDto>,
     val defaultModel: String,
+    val defaultContextWindowTokens: Int = 1_000_000,
     val temperatureMin: Double,
     val temperatureMax: Double,
     val defaultTemperature: Double,
@@ -90,5 +92,7 @@ data class AgentDto(
     val stopSequences: String = "",
     val agentMode: AgentMode = AgentMode.DEFAULT,
     val status: String,
+    val contextSummary: String = "",
+    val summarizedUntilCreatedAt: Long = 0,
     val messages: List<AgentMessageDto> = emptyList(),
 )

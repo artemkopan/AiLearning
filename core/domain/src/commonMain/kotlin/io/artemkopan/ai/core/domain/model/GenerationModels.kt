@@ -33,3 +33,9 @@ data class LlmGeneration(
     val model: String,
     val usage: TokenUsage?,
 )
+
+data class LlmEmbedding(
+    val values: List<Double>,
+    val model: String,
+    val provider: String,
+)
