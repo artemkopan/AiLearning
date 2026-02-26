@@ -32,6 +32,14 @@ class CompleteAgentMessageUseCase(
             return repository.getState(domainUserId)
         }
 
+        indexMessageEmbeddingsUseCase.execute(
+            userId = domainUserId,
+            agentId = domainAgentId,
+            messageId = domainMessageId,
+            text = command.output.text,
+            createdAt = currentMessage.createdAt,
+        ).getOrElse { return Result.failure(it) }
+
         repository.updateMessage(
             userId = domainUserId,
             agentId = domainAgentId,
@@ -44,14 +52,6 @@ class CompleteAgentMessageUseCase(
             usageOutputTokens = command.output.usage?.outputTokens,
             usageTotalTokens = command.output.usage?.totalTokens,
             latencyMs = command.latencyMs,
-        ).getOrElse { return Result.failure(it) }
-
-        indexMessageEmbeddingsUseCase.execute(
-            userId = domainUserId,
-            agentId = domainAgentId,
-            messageId = domainMessageId,
-            text = command.output.text,
-            createdAt = currentMessage.createdAt,
         ).getOrElse { return Result.failure(it) }
 
         return repository.updateAgentStatus(

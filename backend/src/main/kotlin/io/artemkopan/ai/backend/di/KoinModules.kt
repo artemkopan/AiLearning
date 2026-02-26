@@ -95,7 +95,8 @@ val dataModule = module {
 
 val applicationModule = module {
     single { DomainErrorMapper() }
-    single { ValidatePromptUseCase() }
+    single { EstimatePromptTokensUseCase() }
+    single { ValidatePromptUseCase(estimatePromptTokensUseCase = get()) }
     single {
         val config = get<AppConfig>()
         ResolveGenerationOptionsUseCase(defaultModel = config.defaultModel)
@@ -116,7 +117,6 @@ val applicationModule = module {
     single { UpdateAgentDraftUseCase(repository = get()) }
     single { CloseAgentUseCase(repository = get()) }
     single { SetAgentStatusUseCase(repository = get()) }
-    single { EstimatePromptTokensUseCase() }
     single { BuildContextPromptUseCase() }
     single {
         val config = get<AppConfig>()

@@ -20,11 +20,6 @@ class GenerateTextUseCase(
     suspend fun execute(command: GenerateCommand): Result<GenerateOutput> {
         log.d { "Executing generate text: promptLength=${command.prompt.length}" }
 
-        val prompt = validatePromptUseCase.execute(command.prompt).getOrElse { error ->
-            log.w { "Prompt validation failed: ${error.message}" }
-            return Result.failure(error)
-        }
-
         val options = resolveGenerationOptionsUseCase.execute(
             command.model, command.temperature, command.maxOutputTokens, command.stopSequences,
         )
@@ -32,6 +27,19 @@ class GenerateTextUseCase(
                 log.w { "Options resolution failed: ${error.message}" }
                 return Result.failure(error)
             }
+
+        val modelMetadata = repository.getModelMetadata(options.modelId.value).getOrElse { error ->
+            val mappedError = errorMapper.mapToAppError(error)
+            log.w { "Model metadata lookup failed: model=${options.modelId.value}, reason=${mappedError.message}" }
+            return Result.failure(mappedError)
+        }
+
+        val prompt = validatePromptUseCase.execute(command.prompt, modelMetadata.inputTokenLimit).getOrElse { error ->
+            log.w {
+                "Prompt validation failed: ${error.message}; model=${options.modelId.value}, inputLimit=${modelMetadata.inputTokenLimit}"
+            }
+            return Result.failure(error)
+        }
 
         val systemInstruction = resolveAgentModeUseCase.execute(command.agentMode).getOrElse { error ->
             log.w { "Agent mode resolution failed: ${error.message}" }
