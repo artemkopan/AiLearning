@@ -6,6 +6,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.plugins.ServerResponseException
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -22,6 +23,9 @@ class GeminiNetworkClient(
     private val apiKey: String,
     private val baseUrl: String = "https://generativelanguage.googleapis.com/v1beta",
 ) : LlmNetworkClient {
+    companion object {
+        private const val ProviderApiKeyHeader = "x-goog-api-key"
+    }
 
     private val log = Logger.withTag("GeminiNetworkClient")
     private val requestJson = Json {
@@ -35,8 +39,7 @@ class GeminiNetworkClient(
 
     override suspend fun generate(request: NetworkGenerateRequest): Result<NetworkGenerateResponse> {
         if (apiKey.isBlank()) {
-            log.e { "API key is missing" }
-            return Result.failure(DataError.AuthenticationError("Missing GEMINI_API_KEY configuration."))
+            return missingApiKeyResult()
         }
 
         log.d { "Starting generation request: model=${request.model}, promptLength=${request.prompt.length}" }
@@ -57,10 +60,8 @@ class GeminiNetworkClient(
                     GeminiContent(parts = listOf(GeminiPart(text = it)))
                 },
             )
-            log.i { "LLM request curl (api key redacted): ${toCurlCommand(endpoint, requestBody)}" }
-
             val response: GeminiGenerateResponse = httpClient.post(endpoint) {
-                header("x-goog-api-key", apiKey)
+                header(ProviderApiKeyHeader, apiKey)
                 contentType(ContentType.Application.Json)
                 setBody(requestBody)
             }.body()
@@ -100,18 +101,10 @@ class GeminiNetworkClient(
             )
         }.recoverCatching { throwable ->
             val latencyMs = currentTimeMillis() - startTime
-            val mappedError = when (throwable) {
-                is DataError -> throwable
-                is ClientRequestException -> when (throwable.response.status) {
-                    HttpStatusCode.TooManyRequests -> DataError.RateLimitError("Provider rate limit exceeded.", throwable)
-                    HttpStatusCode.NotFound -> DataError.NetworkError("Model '${request.model}' was not found.", throwable)
-                    HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden ->
-                        DataError.AuthenticationError("Provider authentication failed.", throwable)
-                    else -> DataError.NetworkError("Provider call failed: ${throwable.response.status}.", throwable)
-                }
-                is ServerResponseException -> DataError.NetworkError("Provider server error: ${throwable.response.status}.", throwable)
-                else -> DataError.NetworkError("Provider call failed.", throwable)
-            }
+            val mappedError = mapProviderError(
+                throwable = throwable,
+                notFoundMessage = "Model '${request.model}' was not found.",
+            )
             log.e(throwable) {
                 "Generation failed: model=${request.model}, latencyMs=$latencyMs, error=${mappedError.message}"
             }
@@ -121,8 +114,7 @@ class GeminiNetworkClient(
 
     override suspend fun embed(request: NetworkEmbedRequest): Result<NetworkEmbedResponse> {
         if (apiKey.isBlank()) {
-            log.e { "API key is missing" }
-            return Result.failure(DataError.AuthenticationError("Missing GEMINI_API_KEY configuration."))
+            return missingApiKeyResult()
         }
 
         val text = request.text.trim()
@@ -140,7 +132,7 @@ class GeminiNetworkClient(
             )
 
             val httpResponse = httpClient.post(endpoint) {
-                header("x-goog-api-key", apiKey)
+                header(ProviderApiKeyHeader, apiKey)
                 contentType(ContentType.Application.Json)
                 setBody(requestBody)
             }
@@ -168,22 +160,11 @@ class GeminiNetworkClient(
             )
         }.recoverCatching { throwable ->
             val latencyMs = currentTimeMillis() - startTime
-            val mappedError = when (throwable) {
-                is DataError -> throwable
-                is ClientRequestException -> when (throwable.response.status) {
-                    HttpStatusCode.TooManyRequests -> DataError.RateLimitError("Provider rate limit exceeded.", throwable)
-                    HttpStatusCode.NotFound -> DataError.NetworkError(
-                        "Embedding model '${request.model}' is not available for Gemini API v1beta embedContent. " +
-                            "Set CONTEXT_EMBEDDING_MODEL=gemini-embedding-001 or another supported model.",
-                        throwable,
-                    )
-                    HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden ->
-                        DataError.AuthenticationError("Provider authentication failed.", throwable)
-                    else -> DataError.NetworkError("Provider call failed: ${throwable.response.status}.", throwable)
-                }
-                is ServerResponseException -> DataError.NetworkError("Provider server error: ${throwable.response.status}.", throwable)
-                else -> DataError.NetworkError("Provider call failed.", throwable)
-            }
+            val mappedError = mapProviderError(
+                throwable = throwable,
+                notFoundMessage = "Embedding model '${request.model}' is not available for Gemini API v1beta embedContent. " +
+                    "Set CONTEXT_EMBEDDING_MODEL=gemini-embedding-001 or another supported model.",
+            )
             log.e(throwable) {
                 "Embedding failed: model=${request.model}, latencyMs=$latencyMs, error=${mappedError.message}"
             }
@@ -191,14 +172,73 @@ class GeminiNetworkClient(
         }
     }
 
-    private fun toCurlCommand(endpoint: String, body: GeminiGenerateRequest): String {
-        val payload = requestJson.encodeToString(body)
-        return listOf(
-            "curl -X POST ${shQuote(endpoint)}",
-            "-H ${shQuote("x-goog-api-key: <REDACTED>")}",
-            "-H ${shQuote("Content-Type: application/json")}",
-            "-d ${shQuote(payload)}",
-        ).joinToString(" ")
+    override suspend fun getModelMetadata(model: String): Result<NetworkModelMetadata> {
+        if (apiKey.isBlank()) {
+            return missingApiKeyResult()
+        }
+
+        val normalizedModel = model.trim()
+        if (normalizedModel.isEmpty()) {
+            return Result.failure(DataError.EmptyResponseError("Model id must not be blank."))
+        }
+
+        log.d { "Starting model metadata request: model=$normalizedModel" }
+        val startTime = currentTimeMillis()
+
+        return runCatching {
+            val endpoint = "$baseUrl/models/$normalizedModel"
+            val response: GeminiModelResponse = httpClient.get(endpoint) {
+                header(ProviderApiKeyHeader, apiKey)
+            }.body()
+
+            val inputLimit = response.inputTokenLimit ?: 0
+            if (inputLimit <= 0) {
+                throw DataError.EmptyResponseError(
+                    "Model '$normalizedModel' returned missing or invalid inputTokenLimit."
+                )
+            }
+            val outputLimit = response.outputTokenLimit ?: 0
+            val latencyMs = currentTimeMillis() - startTime
+            log.i {
+                "Model metadata completed: model=$normalizedModel, latencyMs=$latencyMs, " +
+                    "inputTokenLimit=$inputLimit, outputTokenLimit=$outputLimit"
+            }
+
+            NetworkModelMetadata(
+                model = response.name?.substringAfter("models/").orEmpty().ifBlank { normalizedModel },
+                provider = "gemini",
+                inputTokenLimit = inputLimit,
+                outputTokenLimit = outputLimit,
+            )
+        }.recoverCatching { throwable ->
+            val latencyMs = currentTimeMillis() - startTime
+            val mappedError = mapProviderError(
+                throwable = throwable,
+                notFoundMessage = "Model '$normalizedModel' was not found.",
+            )
+            log.e(throwable) {
+                "Model metadata failed: model=$normalizedModel, latencyMs=$latencyMs, error=${mappedError.message}"
+            }
+            throw mappedError
+        }
+    }
+
+    private fun mapProviderError(throwable: Throwable, notFoundMessage: String): DataError = when (throwable) {
+        is DataError -> throwable
+        is ClientRequestException -> when (throwable.response.status) {
+            HttpStatusCode.TooManyRequests -> DataError.RateLimitError("Provider rate limit exceeded.", throwable)
+            HttpStatusCode.NotFound -> DataError.NetworkError(notFoundMessage, throwable)
+            HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden ->
+                DataError.AuthenticationError("Provider authentication failed.", throwable)
+            else -> DataError.NetworkError("Provider call failed: ${throwable.response.status}.", throwable)
+        }
+        is ServerResponseException -> DataError.NetworkError("Provider server error: ${throwable.response.status}.", throwable)
+        else -> DataError.NetworkError("Provider call failed.", throwable)
+    }
+
+    private fun <T> missingApiKeyResult(): Result<T> {
+        log.e { "API key is missing" }
+        return Result.failure(DataError.AuthenticationError("Missing GEMINI_API_KEY configuration."))
     }
 
     private fun shQuote(value: String): String {
@@ -274,4 +314,11 @@ private data class GeminiEmbedResponse(
 @Serializable
 private data class GeminiEmbedding(
     val values: List<Double> = emptyList(),
+)
+
+@Serializable
+private data class GeminiModelResponse(
+    val name: String? = null,
+    val inputTokenLimit: Int? = null,
+    val outputTokenLimit: Int? = null,
 )

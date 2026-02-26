@@ -37,6 +37,7 @@ fun CyberpunkTextField(
     placeholder: String? = null,
     singleLine: Boolean = false,
     minLines: Int = 1,
+    maxLines: Int = Int.MAX_VALUE,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
 ) {
     OutlinedTextField(
@@ -59,6 +60,7 @@ fun CyberpunkTextField(
         modifier = modifier,
         singleLine = singleLine,
         minLines = minLines,
+        maxLines = maxLines,
         keyboardOptions = keyboardOptions,
         colors = cyberpunkTextFieldColors(),
         shape = RoundedCornerShape(2.dp),
@@ -74,6 +76,7 @@ fun CyberpunkTextField(
     placeholder: String? = null,
     singleLine: Boolean = false,
     minLines: Int = 1,
+    maxLines: Int = Int.MAX_VALUE,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
@@ -97,6 +100,7 @@ fun CyberpunkTextField(
         modifier = modifier,
         singleLine = singleLine,
         minLines = minLines,
+        maxLines = maxLines,
         keyboardOptions = keyboardOptions,
         visualTransformation = visualTransformation,
         colors = cyberpunkTextFieldColors(),

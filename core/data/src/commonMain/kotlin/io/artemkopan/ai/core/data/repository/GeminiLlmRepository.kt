@@ -8,6 +8,7 @@ import io.artemkopan.ai.core.domain.error.DomainError
 import io.artemkopan.ai.core.domain.model.LlmEmbedding
 import io.artemkopan.ai.core.domain.model.LlmGeneration
 import io.artemkopan.ai.core.domain.model.LlmGenerationInput
+import io.artemkopan.ai.core.domain.model.LlmModelMetadata
 import io.artemkopan.ai.core.domain.model.TokenUsage
 import io.artemkopan.ai.core.domain.repository.LlmRepository
 import co.touchlab.kermit.Logger
@@ -68,6 +69,24 @@ class GeminiLlmRepository(
             log.e(throwable) { "Repository embed failed" }
             throw mapToDomainError(throwable)
         }
+    }
+
+    override suspend fun getModelMetadata(model: String): Result<LlmModelMetadata> {
+        log.d { "Repository model metadata lookup called: model=$model" }
+
+        return networkClient.getModelMetadata(model)
+            .map { metadata ->
+                LlmModelMetadata(
+                    model = metadata.model,
+                    provider = metadata.provider,
+                    inputTokenLimit = metadata.inputTokenLimit,
+                    outputTokenLimit = metadata.outputTokenLimit,
+                )
+            }
+            .recoverCatching { throwable ->
+                log.e(throwable) { "Repository model metadata lookup failed: model=$model" }
+                throw mapToDomainError(throwable)
+            }
     }
 
     private fun mapToDomainError(throwable: Throwable): DomainError = when (throwable) {

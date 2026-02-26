@@ -9,6 +9,7 @@ import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.application.usecase.CloseAgentUseCase
 import io.artemkopan.ai.core.application.usecase.CompleteAgentMessageUseCase
 import io.artemkopan.ai.core.application.usecase.CreateAgentUseCase
+import io.artemkopan.ai.core.application.usecase.FailAgentMessageUseCase
 import io.artemkopan.ai.core.application.usecase.GetAgentStateUseCase
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
@@ -17,10 +18,12 @@ import io.artemkopan.ai.core.application.usecase.SelectAgentUseCase
 import io.artemkopan.ai.core.application.usecase.StartAgentMessageUseCase
 import io.artemkopan.ai.core.application.usecase.StopAgentMessageUseCase
 import io.artemkopan.ai.core.application.usecase.UpdateAgentDraftUseCase
+import io.artemkopan.ai.core.domain.repository.LlmRepository
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.ErrorResponseDto
 import io.artemkopan.ai.sharedcontract.GenerateRequestDto
 import io.artemkopan.ai.sharedcontract.GenerateResponseDto
+import io.artemkopan.ai.sharedcontract.ModelMetadataDto
 import io.artemkopan.ai.sharedcontract.ModelOptionDto
 import io.artemkopan.ai.sharedcontract.TokenUsageDto
 import io.ktor.http.HttpHeaders
@@ -34,6 +37,7 @@ import io.ktor.server.application.log
 import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.server.plugins.doublereceive.DoubleReceive
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -44,6 +48,9 @@ import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.Json
 import org.koin.ktor.ext.inject
 import org.koin.ktor.plugin.Koin
@@ -52,7 +59,10 @@ import java.util.UUID
 
 private val RequestIdKey = io.ktor.util.AttributeKey<String>("requestId")
 
-fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
+fun Application.module(
+    config: AppConfig = AppConfig.fromEnv(),
+    llmRepositoryOverride: LlmRepository? = null,
+) {
     val logger = log
     logger.info(
         "Application config: port={}, geminiModel={}, corsOrigin={}, dbHost={}, dbPort={}, dbName={}, geminiApiKeyPresent={}",
@@ -79,7 +89,10 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
     val closeAgentUseCase by inject<CloseAgentUseCase>()
     val startAgentMessageUseCase by inject<StartAgentMessageUseCase>()
     val completeAgentMessageUseCase by inject<CompleteAgentMessageUseCase>()
+    val failAgentMessageUseCase by inject<FailAgentMessageUseCase>()
     val stopAgentMessageUseCase by inject<StopAgentMessageUseCase>()
+    val injectedLlmRepository by inject<LlmRepository>()
+    val llmRepository = llmRepositoryOverride ?: injectedLlmRepository
 
     val appJson = Json {
         ignoreUnknownKeys = true
@@ -87,6 +100,8 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         classDiscriminator = "type"
     }
 
+    install(DoubleReceive)
+    install(HttpBodyLogging)
     install(CallLogging)
     install(ContentNegotiation) {
         json(appJson)
@@ -132,6 +147,7 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         closeAgentUseCase = closeAgentUseCase,
         startAgentMessageUseCase = startAgentMessageUseCase,
         completeAgentMessageUseCase = completeAgentMessageUseCase,
+        failAgentMessageUseCase = failAgentMessageUseCase,
         stopAgentMessageUseCase = stopAgentMessageUseCase,
         generateTextUseCase = generateTextUseCase,
         mapFailureToUserMessageUseCase = mapFailureToUserMessageUseCase,
@@ -148,40 +164,40 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         }
 
         get("/api/v1/config") {
+            val models = resolveConfiguredModels(
+                repository = llmRepository,
+                fallbackContextWindowTokens = config.defaultContextWindowTokens,
+                logger = logger,
+            )
             call.respond(
                 HttpStatusCode.OK,
                 AgentConfigDto(
-                    models = listOf(
-                        ModelOptionDto(
-                            id = "gemini-3-flash-preview",
-                            name = "Gemini 3 Flash Preview",
-                            provider = "gemini",
-                            contextWindowTokens = config.defaultContextWindowTokens,
-                        ),
-                        ModelOptionDto(
-                            id = "gemini-2.5-flash",
-                            name = "Gemini 2.5 Flash",
-                            provider = "gemini",
-                            contextWindowTokens = config.defaultContextWindowTokens,
-                        ),
-                        ModelOptionDto(
-                            id = "gemini-2.5-flash-lite",
-                            name = "Gemini 2.5 Flash Lite",
-                            provider = "gemini",
-                            contextWindowTokens = config.defaultContextWindowTokens,
-                        ),
-                        ModelOptionDto(
-                            id = "gemini-flash-latest",
-                            name = "Gemini Flash Latest",
-                            provider = "gemini",
-                            contextWindowTokens = config.defaultContextWindowTokens,
-                        ),
-                    ),
+                    models = models,
                     defaultModel = config.defaultModel,
                     defaultContextWindowTokens = config.defaultContextWindowTokens,
                     temperatureMin = 0.0,
                     temperatureMax = 2.0,
                     defaultTemperature = 0.7,
+                )
+            )
+        }
+
+        get("/api/v1/models/metadata") {
+            val modelId = call.request.queryParameters["model"]?.trim().orEmpty()
+            if (modelId.isEmpty()) {
+                throw AppError.Validation("Model query parameter is required.")
+            }
+
+            val metadata = llmRepository.getModelMetadata(modelId).getOrElse { throwable ->
+                throw throwable
+            }
+            call.respond(
+                HttpStatusCode.OK,
+                ModelMetadataDto(
+                    model = metadata.model,
+                    provider = metadata.provider,
+                    inputTokenLimit = metadata.inputTokenLimit,
+                    outputTokenLimit = metadata.outputTokenLimit,
                 )
             )
         }
@@ -266,6 +282,58 @@ fun Application.module(config: AppConfig = AppConfig.fromEnv()) {
         }
     }
 }
+
+private suspend fun resolveConfiguredModels(
+    repository: LlmRepository,
+    fallbackContextWindowTokens: Int,
+    logger: org.slf4j.Logger,
+): List<ModelOptionDto> = coroutineScope {
+    curatedGeminiModels(fallbackContextWindowTokens)
+        .map { option ->
+            async {
+                val resolvedContextWindow = repository.getModelMetadata(option.id)
+                    .map { metadata -> metadata.inputTokenLimit }
+                    .getOrElse { throwable ->
+                        logger.warn(
+                            "Model metadata lookup failed for model={}; falling back to defaultContextWindowTokens={}; reason={}",
+                            option.id,
+                            fallbackContextWindowTokens,
+                            throwable.message,
+                        )
+                        fallbackContextWindowTokens
+                    }
+                option.copy(contextWindowTokens = resolvedContextWindow)
+            }
+        }
+        .awaitAll()
+}
+
+private fun curatedGeminiModels(fallbackContextWindowTokens: Int): List<ModelOptionDto> = listOf(
+    ModelOptionDto(
+        id = "gemini-3-flash-preview",
+        name = "Gemini 3 Flash Preview",
+        provider = "gemini",
+        contextWindowTokens = fallbackContextWindowTokens,
+    ),
+    ModelOptionDto(
+        id = "gemini-2.5-flash",
+        name = "Gemini 2.5 Flash",
+        provider = "gemini",
+        contextWindowTokens = fallbackContextWindowTokens,
+    ),
+    ModelOptionDto(
+        id = "gemini-2.5-flash-lite",
+        name = "Gemini 2.5 Flash Lite",
+        provider = "gemini",
+        contextWindowTokens = fallbackContextWindowTokens,
+    ),
+    ModelOptionDto(
+        id = "gemini-flash-latest",
+        name = "Gemini Flash Latest",
+        provider = "gemini",
+        contextWindowTokens = fallbackContextWindowTokens,
+    ),
+)
 
 private fun io.ktor.server.application.ApplicationCall.ensureRequestId(): String {
     if (attributes.contains(RequestIdKey)) return attributes[RequestIdKey]

@@ -32,3 +32,10 @@ data class NetworkEmbedResponse(
     val provider: String,
     val model: String,
 )
+
+data class NetworkModelMetadata(
+    val model: String,
+    val provider: String,
+    val inputTokenLimit: Int,
+    val outputTokenLimit: Int,
+)

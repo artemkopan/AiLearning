@@ -3,6 +3,7 @@ package io.artemkopan.ai.webapp.ui
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.AgentWsClientMessageDto
 import io.artemkopan.ai.sharedcontract.AgentWsServerMessageDto
+import io.artemkopan.ai.sharedcontract.ModelMetadataDto
 import io.artemkopan.ai.sharedui.gateway.AgentGateway
 import co.touchlab.kermit.Logger
 import kotlinx.browser.window
@@ -48,6 +49,25 @@ class WsAgentGateway(
             json.decodeFromString(AgentConfigDto.serializer(), bodyText)
         }.onFailure { throwable ->
             log.e(throwable) { "Failed to fetch config" }
+        }
+    }
+
+    override suspend fun getModelMetadata(model: String): Result<ModelMetadataDto> {
+        log.d { "Fetching model metadata: model=$model" }
+        return runCatching {
+            val normalized = model.trim()
+            val response = window.fetch(
+                "$backendBaseUrl/api/v1/models/metadata?model=$normalized"
+            ).await()
+            val bodyText = response.text().await()
+
+            if (!response.ok) {
+                throw RuntimeException("Failed to fetch model metadata: ${response.status}")
+            }
+
+            json.decodeFromString(ModelMetadataDto.serializer(), bodyText)
+        }.onFailure { throwable ->
+            log.e(throwable) { "Failed to fetch model metadata: model=$model" }
         }
     }
 

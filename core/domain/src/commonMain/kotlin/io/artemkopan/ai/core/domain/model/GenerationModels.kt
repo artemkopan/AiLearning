@@ -39,3 +39,10 @@ data class LlmEmbedding(
     val model: String,
     val provider: String,
 )
+
+data class LlmModelMetadata(
+    val model: String,
+    val provider: String,
+    val inputTokenLimit: Int,
+    val outputTokenLimit: Int,
+)

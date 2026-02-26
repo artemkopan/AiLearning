@@ -45,6 +45,14 @@ data class ModelOptionDto(
 )
 
 @Serializable
+data class ModelMetadataDto(
+    val model: String,
+    val provider: String,
+    val inputTokenLimit: Int,
+    val outputTokenLimit: Int,
+)
+
+@Serializable
 data class AgentConfigDto(
     val models: List<ModelOptionDto>,
     val defaultModel: String,

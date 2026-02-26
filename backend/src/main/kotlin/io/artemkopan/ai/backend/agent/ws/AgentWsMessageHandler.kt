@@ -10,6 +10,8 @@ import io.artemkopan.ai.core.application.usecase.CloseAgentUseCase
 import io.artemkopan.ai.core.application.usecase.CompleteAgentMessageCommand
 import io.artemkopan.ai.core.application.usecase.CompleteAgentMessageUseCase
 import io.artemkopan.ai.core.application.usecase.CreateAgentUseCase
+import io.artemkopan.ai.core.application.usecase.FailAgentMessageCommand
+import io.artemkopan.ai.core.application.usecase.FailAgentMessageUseCase
 import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
 import io.artemkopan.ai.core.application.usecase.GetAgentStateUseCase
 import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
@@ -31,6 +33,7 @@ import io.artemkopan.ai.sharedcontract.UpdateAgentDraftCommandDto
 import io.ktor.server.websocket.DefaultWebSocketServerSession
 import io.ktor.websocket.Frame
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -49,6 +52,7 @@ class AgentWsMessageHandler(
     private val closeAgentUseCase: CloseAgentUseCase,
     private val startAgentMessageUseCase: StartAgentMessageUseCase,
     private val completeAgentMessageUseCase: CompleteAgentMessageUseCase,
+    private val failAgentMessageUseCase: FailAgentMessageUseCase,
     private val stopAgentMessageUseCase: StopAgentMessageUseCase,
     private val generateTextUseCase: GenerateTextUseCase,
     private val mapFailureToUserMessageUseCase: MapFailureToUserMessageUseCase,
@@ -157,21 +161,45 @@ class AgentWsMessageHandler(
                                         )
                                             .onSuccess { state -> broadcastSnapshot(userScope, state) }
                                             .onFailure { throwable ->
+                                                markProcessingFailed(
+                                                    userScope = userScope,
+                                                    agentId = started.agentId.value,
+                                                    messageId = started.messageId.value,
+                                                    requestId = parsed.requestId,
+                                                )
                                                 sendOperationFailure(session, throwable, parsed.requestId)
                                             }
                                     }
                                     .onFailure { throwable ->
                                         if (!isStopRequested(userScope, started.agentId.value, started.messageId.value)) {
-                                            stopAgentMessageUseCase.execute(
-                                                userScope,
-                                                StopAgentMessageCommand(
-                                                    agentId = started.agentId.value,
-                                                    messageId = started.messageId.value,
-                                                )
-                                            ).onSuccess { state -> broadcastSnapshot(userScope, state) }
+                                            markProcessingFailed(
+                                                userScope = userScope,
+                                                agentId = started.agentId.value,
+                                                messageId = started.messageId.value,
+                                                requestId = parsed.requestId,
+                                            )
                                             sendOperationFailure(session, throwable, parsed.requestId)
                                         }
                                     }
+                            } catch (throwable: Throwable) {
+                                val stopRequested = isStopRequested(
+                                    userScope = userScope,
+                                    agentId = started.agentId.value,
+                                    messageId = started.messageId.value,
+                                )
+                                if (throwable is CancellationException && stopRequested) {
+                                    throw throwable
+                                }
+                                markProcessingFailed(
+                                    userScope = userScope,
+                                    agentId = started.agentId.value,
+                                    messageId = started.messageId.value,
+                                    requestId = parsed.requestId,
+                                )
+                                sendOperationFailure(session, throwable, parsed.requestId)
+                                if (throwable is CancellationException) {
+                                    throw throwable
+                                }
                             } finally {
                                 clearProcessing(userScope, started.agentId.value, started.messageId.value)
                             }
@@ -255,6 +283,32 @@ class AgentWsMessageHandler(
                 json.encodeToString(AgentWsServerMessageDto.serializer(), payload)
             )
         )
+    }
+
+    private suspend fun markProcessingFailed(
+        userScope: String,
+        agentId: String,
+        messageId: String,
+        requestId: String?,
+    ) {
+        failAgentMessageUseCase.execute(
+            userScope,
+            FailAgentMessageCommand(
+                agentId = agentId,
+                messageId = messageId,
+            )
+        ).onSuccess { state ->
+            broadcastSnapshot(userScope, state)
+        }.onFailure { throwable ->
+            logger.warn(
+                "Failed to mark processing as failed userScope={} agentId={} messageId={} requestId={} reason={}",
+                userScope,
+                agentId,
+                messageId,
+                requestId,
+                throwable.message,
+            )
+        }
     }
 
     private suspend fun isAgentBusy(userScope: String, agentId: String): Boolean {

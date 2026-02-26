@@ -99,6 +99,7 @@ private fun ModelDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selectedModel = models.find { it.id == selectedModelId }
+        ?: models.find { it.name == selectedModelId }
     val displayText = selectedModel?.name ?: models.firstOrNull()?.name.orEmpty()
 
     ExposedDropdownMenuBox(
@@ -131,7 +132,7 @@ private fun ModelDropdown(
             containerColor = CyberpunkColors.CardDark,
         ) {
             models.forEach { option ->
-                val isSelected = option.id == selectedModelId ||
+                val isSelected = option.id == selectedModel?.id ||
                     (selectedModelId.isEmpty() && option == models.first())
                 DropdownMenuItem(
                     text = {

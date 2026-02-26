@@ -18,7 +18,15 @@ import io.artemkopan.ai.sharedcontract.StopAgentMessageCommandDto
 import io.artemkopan.ai.sharedcontract.SubscribeAgentsDto
 import io.artemkopan.ai.sharedcontract.UpdateAgentDraftCommandDto
 import io.artemkopan.ai.sharedui.gateway.AgentGateway
+import io.artemkopan.ai.sharedui.usecase.BuildUpdatedConfigWithModelMetadataUseCase
+import io.artemkopan.ai.sharedui.usecase.EnrichRuntimeStateUseCase
+import io.artemkopan.ai.sharedui.usecase.FilterTemperatureInputUseCase
+import io.artemkopan.ai.sharedui.usecase.MapSnapshotToUiStateUseCase
+import io.artemkopan.ai.sharedui.usecase.NormalizeAgentsForConfigUseCase
+import io.artemkopan.ai.sharedui.usecase.NormalizeModelUseCase
+import io.artemkopan.ai.sharedui.usecase.ObserveActiveModelSelectionUseCase
 import co.touchlab.kermit.Logger
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,6 +90,8 @@ data class UiState(
     val activeAgentId: AgentId? = null,
     val errorPopup: ErrorPopupState? = null,
     val agentConfig: AgentConfigDto? = null,
+    val contextTotalTokensByAgent: Map<AgentId, String> = emptyMap(),
+    val contextLeftByAgent: Map<AgentId, String> = emptyMap(),
     val isConnected: Boolean = false,
 )
 
@@ -102,6 +112,13 @@ sealed interface UiAction {
 
 class AppViewModel(
     private val gateway: AgentGateway,
+    private val normalizeModelUseCase: NormalizeModelUseCase,
+    private val filterTemperatureInputUseCase: FilterTemperatureInputUseCase,
+    private val normalizeAgentsForConfigUseCase: NormalizeAgentsForConfigUseCase,
+    private val mapSnapshotToUiStateUseCase: MapSnapshotToUiStateUseCase,
+    private val observeActiveModelSelectionUseCase: ObserveActiveModelSelectionUseCase,
+    private val buildUpdatedConfigWithModelMetadataUseCase: BuildUpdatedConfigWithModelMetadataUseCase,
+    private val enrichRuntimeStateUseCase: EnrichRuntimeStateUseCase,
 ) : ViewModel() {
 
     private val log = Logger.withTag("AppViewModel")
@@ -111,6 +128,7 @@ class AppViewModel(
     init {
         log.d { "AppViewModel initialized" }
         observeGatewayEvents()
+        observeActiveModelMetadata()
         connectGateway()
         loadConfig()
     }
@@ -150,7 +168,7 @@ class AppViewModel(
         viewModelScope.launch {
             gateway.connect()
                 .onSuccess {
-                    _state.update { it.copy(isConnected = true) }
+                    updateState { it.copy(isConnected = true) }
                     sendCommand { SubscribeAgentsDto() }
                 }
                 .onFailure { throwable ->
@@ -167,7 +185,16 @@ class AppViewModel(
         viewModelScope.launch {
             gateway.getConfig()
                 .onSuccess { config ->
-                    _state.update { it.copy(agentConfig = config) }
+                    val updates = mutableListOf<AgentState>()
+                    updateState { current ->
+                        val normalized = normalizeAgentsForConfigUseCase(current.agents, config)
+                        updates += normalized.draftUpdates
+                        current.copy(
+                            agents = normalized.agents,
+                            agentConfig = config,
+                        )
+                    }
+                    updates.forEach(::sendDraftUpdate)
                 }
                 .onFailure { throwable ->
                     log.e(throwable) { "Failed to load config" }
@@ -182,7 +209,8 @@ class AppViewModel(
     }
 
     private fun handleModelChanged(value: String) {
-        updateActiveAgent { it.copy(model = value) }
+        val normalized = normalizeModelUseCase(value, _state.value.agentConfig)
+        updateActiveAgent { it.copy(model = normalized) }
         sendActiveDraftUpdate()
     }
 
@@ -192,18 +220,7 @@ class AppViewModel(
     }
 
     private fun handleTemperatureChanged(value: String) {
-        val filtered = buildString {
-            var hasDot = false
-            for (ch in value) {
-                when {
-                    ch.isDigit() -> append(ch)
-                    ch == '.' && !hasDot -> {
-                        append(ch)
-                        hasDot = true
-                    }
-                }
-            }
-        }
+        val filtered = filterTemperatureInputUseCase(value)
         updateActiveAgent { it.copy(temperature = filtered) }
         sendActiveDraftUpdate()
     }
@@ -250,77 +267,49 @@ class AppViewModel(
     }
 
     private fun handleDismissError() {
-        _state.update { it.copy(errorPopup = null) }
+        updateState { it.copy(errorPopup = null) }
     }
 
     private fun applySnapshot(snapshot: AgentStateSnapshotDto) {
-        val currentAgents = _state.value.agents
-        val order = snapshot.agents.map { AgentId(it.id) }
-        val mapped = snapshot.agents.associate { dto ->
-            val id = AgentId(dto.id)
-            val preservedDraft = currentAgents[id]?.draftMessage.orEmpty()
-            id to AgentState(
-                id = id,
-                title = dto.title,
-                model = dto.model,
-                maxOutputTokens = dto.maxOutputTokens,
-                temperature = dto.temperature,
-                stopSequences = dto.stopSequences,
-                agentMode = dto.agentMode,
-                status = dto.status,
-                contextSummary = dto.contextSummary,
-                summarizedUntilCreatedAt = dto.summarizedUntilCreatedAt,
-                messages = dto.messages.map { message ->
-                    AgentMessageState(
-                        id = message.id,
-                        role = message.role,
-                        text = message.text,
-                        status = message.status,
-                        createdAt = message.createdAt,
-                        provider = message.provider,
-                        model = message.model,
-                        usage = message.usage?.let {
-                            UsageResult(
-                                inputTokens = it.inputTokens,
-                                outputTokens = it.outputTokens,
-                                totalTokens = it.totalTokens,
-                            )
-                        },
-                        latencyMs = message.latencyMs,
-                    )
-                },
-                draftMessage = preservedDraft,
-            )
-        }
+        val mapped = mapSnapshotToUiStateUseCase(
+            snapshot = snapshot,
+            currentAgents = _state.value.agents,
+            config = _state.value.agentConfig,
+        )
 
-        _state.update {
+        updateState {
             it.copy(
-                agents = mapped,
-                agentOrder = order,
-                activeAgentId = snapshot.activeAgentId?.let(::AgentId),
+                agents = mapped.agents,
+                agentOrder = mapped.agentOrder,
+                activeAgentId = mapped.activeAgentId,
                 errorPopup = null,
             )
         }
+        mapped.draftUpdates.forEach(::sendDraftUpdate)
     }
 
     private fun sendActiveDraftUpdate() {
         val active = getActiveAgent() ?: return
+        sendDraftUpdate(active)
+    }
+
+    private fun sendDraftUpdate(agent: AgentState) {
         sendCommand {
             UpdateAgentDraftCommandDto(
-                agentId = active.id.value,
-                model = active.model,
-                maxOutputTokens = active.maxOutputTokens,
-                temperature = active.temperature,
-                stopSequences = active.stopSequences,
-                agentMode = active.agentMode,
+                agentId = agent.id.value,
+                model = agent.model,
+                maxOutputTokens = agent.maxOutputTokens,
+                temperature = agent.temperature,
+                stopSequences = agent.stopSequences,
+                agentMode = agent.agentMode,
             )
         }
     }
 
     private fun updateActiveAgent(block: (AgentState) -> AgentState) {
-        _state.update { state ->
-            val activeId = state.activeAgentId ?: return@update state
-            val active = state.agents[activeId] ?: return@update state
+        updateState { state ->
+            val activeId = state.activeAgentId ?: return@updateState state
+            val active = state.agents[activeId] ?: return@updateState state
             state.copy(agents = state.agents + (activeId to block(active)))
         }
     }
@@ -343,14 +332,48 @@ class AppViewModel(
         }
     }
 
+    private fun observeActiveModelMetadata() {
+        viewModelScope.launch {
+            observeActiveModelSelectionUseCase(state)
+                .collectLatest { selection ->
+                    if (selection == null) return@collectLatest
+                    requestModelMetadata(selection.modelId)
+                }
+        }
+    }
+
+    private suspend fun requestModelMetadata(modelId: String) {
+        val normalized = modelId.trim()
+        if (normalized.isEmpty()) return
+
+        gateway.getModelMetadata(normalized)
+            .onSuccess { metadata ->
+                updateState { current ->
+                    val config = current.agentConfig ?: return@updateState current
+                    current.copy(
+                        agentConfig = buildUpdatedConfigWithModelMetadataUseCase(config, metadata),
+                    )
+                }
+            }
+            .onFailure { throwable ->
+                log.w(throwable) { "Failed to refresh model metadata: model=$normalized" }
+            }
+    }
+
     private fun showError(title: String, message: String) {
-        _state.update {
+        updateState {
             it.copy(
                 errorPopup = ErrorPopupState(
                     title = title,
                     message = message,
                 )
             )
+        }
+    }
+
+    private fun updateState(transform: (UiState) -> UiState) {
+        _state.update { current ->
+            enrichRuntimeStateUseCase(transform(current))
         }
     }
 

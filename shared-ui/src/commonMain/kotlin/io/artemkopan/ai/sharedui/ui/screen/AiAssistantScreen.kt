@@ -45,7 +45,6 @@ import io.artemkopan.ai.sharedui.ui.component.StatusPanel
 import io.artemkopan.ai.sharedui.ui.component.SubmitButton
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkTheme
-import kotlin.math.max
 
 @Composable
 fun AiAssistantScreen(
@@ -111,6 +110,8 @@ private fun AiAssistantContent(
                         SettingsColumn(
                             agent = activeAgent,
                             agentConfig = state.agentConfig,
+                            contextTotalTokensLabel = state.contextTotalTokensByAgent[activeAgent.id] ?: "n/a",
+                            contextLeftLabel = state.contextLeftByAgent[activeAgent.id] ?: "n/a",
                             onAction = onAction,
                             modifier = Modifier
                                 .width(220.dp)
@@ -213,6 +214,7 @@ private fun CenterConversationColumn(
             label = "// MESSAGE",
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
+            maxLines = 8,
         )
 
         SubmitButton(
@@ -245,7 +247,7 @@ private fun MessageRow(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "${message.role.name.lowercase()}  [${message.status}]",
+                text = "${message.role.name.lowercase()} - ${message.status}",
                 style = MaterialTheme.typography.labelMedium,
                 color = roleColor,
             )
@@ -267,29 +269,17 @@ private fun MessageRow(
         )
 
         if (message.role == AgentMessageRoleDto.ASSISTANT && message.status.equals("done", ignoreCase = true)) {
-            val provider = message.provider.orEmpty()
-            val model = message.model.orEmpty()
-            if (provider.isNotBlank() || model.isNotBlank()) {
-                Text(
-                    text = "provider: $provider  //  model: $model",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = CyberpunkColors.TextMuted,
-                )
-            }
-            message.usage?.let { usage ->
-                Text(
-                    text = "tokens  in: ${usage.inputTokens}  out: ${usage.outputTokens}  total: ${usage.totalTokens}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = CyberpunkColors.Cyan,
-                )
-            }
-            message.latencyMs?.let { latencyMs ->
-                Text(
-                    text = "api duration: ${latencyMs} ms",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = CyberpunkColors.TextMuted,
-                )
-            }
+            val provider = message.provider.orEmpty().ifBlank { "n/a" }
+            val model = message.model.orEmpty().ifBlank { "n/a" }
+            val tokens = message.usage?.let { usage ->
+                "in ${usage.inputTokens}, out ${usage.outputTokens}, total ${usage.totalTokens}"
+            } ?: "n/a"
+            val apiDuration = message.latencyMs?.let { "$it ms" } ?: "n/a"
+            Text(
+                text = "info: provider=$provider, model=$model, tokens=$tokens, api duration=$apiDuration",
+                style = MaterialTheme.typography.bodySmall,
+                color = CyberpunkColors.Cyan,
+            )
         }
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -304,6 +294,8 @@ private fun MessageRow(
 private fun SettingsColumn(
     agent: AgentState,
     agentConfig: AgentConfigDto?,
+    contextTotalTokensLabel: String,
+    contextLeftLabel: String,
     onAction: (UiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -335,7 +327,8 @@ private fun SettingsColumn(
 
         RuntimeInfoPanel(
             agent = agent,
-            agentConfig = agentConfig,
+            contextTotalTokensLabel = contextTotalTokensLabel,
+            contextLeftLabel = contextLeftLabel,
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -344,15 +337,13 @@ private fun SettingsColumn(
 @Composable
 private fun RuntimeInfoPanel(
     agent: AgentState,
-    agentConfig: AgentConfigDto?,
+    contextTotalTokensLabel: String,
+    contextLeftLabel: String,
     modifier: Modifier = Modifier,
 ) {
     val latestAssistant = agent.messages.lastOrNull {
         it.role == AgentMessageRoleDto.ASSISTANT && it.status.equals("done", ignoreCase = true)
     }
-    val contextUsed = estimateContextTokens(agent)
-    val contextWindow = resolveContextWindowTokens(agent, agentConfig)
-    val contextLeft = contextWindow?.let { max(it - contextUsed, 0) }
 
     CyberpunkPanel(
         title = "RUNTIME",
@@ -365,7 +356,12 @@ private fun RuntimeInfoPanel(
             color = CyberpunkColors.Cyan,
         )
         Text(
-            text = "context left: ${contextLeft?.toString() ?: "n/a"}",
+            text = "context total: $contextTotalTokensLabel",
+            style = MaterialTheme.typography.bodySmall,
+            color = CyberpunkColors.TextPrimary,
+        )
+        Text(
+            text = "context left: $contextLeftLabel",
             style = MaterialTheme.typography.bodySmall,
             color = CyberpunkColors.TextPrimary,
         )
@@ -375,31 +371,4 @@ private fun RuntimeInfoPanel(
             color = CyberpunkColors.TextMuted,
         )
     }
-}
-
-private fun resolveContextWindowTokens(
-    agent: AgentState,
-    agentConfig: AgentConfigDto?,
-): Int? {
-    if (agentConfig == null) return null
-
-    val selectedModelId = agent.model.ifBlank { agentConfig.defaultModel }
-    return agentConfig.models.firstOrNull { it.id == selectedModelId }?.contextWindowTokens
-        ?: agentConfig.defaultContextWindowTokens
-}
-
-private fun estimateContextTokens(agent: AgentState): Int {
-    val summaryTokens = estimateTokens(agent.contextSummary)
-    val recentMessages = agent.messages
-        .filter { !it.status.equals("stopped", ignoreCase = true) }
-        .filter { it.createdAt > agent.summarizedUntilCreatedAt }
-    val messageTokens = recentMessages.sumOf { message ->
-        estimateTokens(message.text) + 4
-    }
-    return summaryTokens + messageTokens + 64
-}
-
-private fun estimateTokens(text: String): Int {
-    if (text.isBlank()) return 0
-    return (text.length + 3) / 4
 }

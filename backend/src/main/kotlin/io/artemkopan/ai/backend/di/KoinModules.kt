@@ -8,6 +8,7 @@ import io.artemkopan.ai.core.application.mapper.DomainErrorMapper
 import io.artemkopan.ai.core.application.usecase.CloseAgentUseCase
 import io.artemkopan.ai.core.application.usecase.CreateAgentUseCase
 import io.artemkopan.ai.core.application.usecase.EstimatePromptTokensUseCase
+import io.artemkopan.ai.core.application.usecase.FailAgentMessageUseCase
 import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
 import io.artemkopan.ai.core.application.usecase.GetAgentStateUseCase
 import io.artemkopan.ai.core.application.usecase.IndexMessageEmbeddingsUseCase
@@ -34,9 +35,11 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
+import io.ktor.http.HttpHeaders
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.koin.dsl.module
+import org.slf4j.LoggerFactory
 
 val networkModule = module {
     single {
@@ -56,10 +59,17 @@ val networkModule = module {
                 connectTimeoutMillis = 10_000
             }
             install(Logging) {
+                val httpClientLogger = LoggerFactory.getLogger("io.artemkopan.ai.backend.httpclient")
                 logger = object : Logger {
-                    override fun log(message: String) = Unit
+                    override fun log(message: String) {
+                        httpClientLogger.info(message)
+                    }
                 }
-                level = LogLevel.NONE
+                level = LogLevel.ALL
+                sanitizeHeader { header ->
+                    header.equals(HttpHeaders.Authorization, ignoreCase = true) ||
+                        header.equals("x-goog-api-key", ignoreCase = true)
+                }
             }
         }
     }
@@ -155,6 +165,7 @@ val applicationModule = module {
             indexMessageEmbeddingsUseCase = get(),
         )
     }
+    single { FailAgentMessageUseCase(repository = get()) }
     single { StopAgentMessageUseCase(repository = get()) }
     single { MapFailureToUserMessageUseCase() }
 }
