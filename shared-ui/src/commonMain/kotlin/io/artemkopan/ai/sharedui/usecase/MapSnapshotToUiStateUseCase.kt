@@ -37,8 +37,10 @@ class MapSnapshotToUiStateUseCase(
                 stopSequences = dto.stopSequences,
                 agentMode = dto.agentMode,
                 status = dto.status,
+                contextConfig = dto.contextConfig,
                 contextSummary = dto.contextSummary,
                 summarizedUntilCreatedAt = dto.summarizedUntilCreatedAt,
+                contextSummaryUpdatedAt = dto.contextSummaryUpdatedAt,
                 messages = dto.messages.map { message ->
                     AgentMessageState(
                         id = message.id,

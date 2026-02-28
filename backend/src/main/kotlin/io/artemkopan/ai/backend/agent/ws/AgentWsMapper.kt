@@ -2,13 +2,7 @@ package io.artemkopan.ai.backend.agent.ws
 
 import io.artemkopan.ai.core.domain.model.AgentMessageRole
 import io.artemkopan.ai.core.domain.model.AgentState
-import io.artemkopan.ai.sharedcontract.AgentDto
-import io.artemkopan.ai.sharedcontract.AgentMessageDto
-import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
-import io.artemkopan.ai.sharedcontract.AgentMode
-import io.artemkopan.ai.sharedcontract.AgentStateSnapshotDto
-import io.artemkopan.ai.sharedcontract.AgentStateSnapshotMessageDto
-import io.artemkopan.ai.sharedcontract.TokenUsageDto
+import io.artemkopan.ai.sharedcontract.*
 
 class AgentWsMapper {
     fun toSnapshotMessage(state: AgentState): AgentStateSnapshotMessageDto {
@@ -24,8 +18,10 @@ class AgentWsMapper {
                         stopSequences = agent.stopSequences,
                         agentMode = parseAgentMode(agent.agentMode),
                         status = agent.status.value,
+                        contextConfig = agent.contextConfig.toDto(),
                         contextSummary = agent.contextSummary,
                         summarizedUntilCreatedAt = agent.summarizedUntilCreatedAt,
+                        contextSummaryUpdatedAt = agent.contextSummaryUpdatedAt,
                         messages = agent.messages.map { message ->
                             AgentMessageDto(
                                 id = message.id.value,

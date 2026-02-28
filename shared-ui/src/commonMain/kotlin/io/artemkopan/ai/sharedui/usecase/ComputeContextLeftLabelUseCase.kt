@@ -1,6 +1,7 @@
 package io.artemkopan.ai.sharedui.usecase
 
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
+import io.artemkopan.ai.sharedcontract.FullHistoryContextConfigDto
 import io.artemkopan.ai.sharedui.state.AgentState
 import kotlin.math.abs
 import kotlin.math.max
@@ -8,10 +9,14 @@ import kotlin.math.round
 
 class ComputeContextLeftLabelUseCase {
     fun computeContextUsedTokens(agent: AgentState): Int {
-        val summaryTokens = estimateTokens(agent.contextSummary)
-        val recentMessages = agent.messages
+        val summaryTokens = if (agent.contextConfig is FullHistoryContextConfigDto) 0 else estimateTokens(agent.contextSummary)
+        val contextMessages = agent.messages
             .filter { !it.status.equals(STATUS_STOPPED, ignoreCase = true) }
-            .filter { it.createdAt > agent.summarizedUntilCreatedAt }
+        val recentMessages = if (agent.contextConfig is FullHistoryContextConfigDto) {
+            contextMessages
+        } else {
+            contextMessages.filter { it.createdAt > agent.summarizedUntilCreatedAt }
+        }
         val messageTokens = recentMessages.sumOf { message ->
             estimateTokens(message.text) + 4
         }

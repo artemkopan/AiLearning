@@ -1,22 +1,19 @@
 package io.artemkopan.ai.webapp.ui
 
-import io.artemkopan.ai.sharedcontract.AgentConfigDto
-import io.artemkopan.ai.sharedcontract.AgentWsClientMessageDto
-import io.artemkopan.ai.sharedcontract.AgentWsServerMessageDto
-import io.artemkopan.ai.sharedcontract.ModelMetadataDto
-import io.artemkopan.ai.sharedui.gateway.AgentGateway
 import co.touchlab.kermit.Logger
+import io.artemkopan.ai.sharedcontract.*
+import io.artemkopan.ai.sharedui.gateway.AgentGateway
 import kotlinx.browser.window
+import kotlinx.coroutines.await
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.await
 import kotlinx.serialization.json.Json
 import org.w3c.dom.WebSocket
-import kotlin.js.Date
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.js.Date
 import kotlin.random.Random
 
 class WsAgentGateway(
@@ -49,6 +46,22 @@ class WsAgentGateway(
             json.decodeFromString(AgentConfigDto.serializer(), bodyText)
         }.onFailure { throwable ->
             log.e(throwable) { "Failed to fetch config" }
+        }
+    }
+
+    override suspend fun getAgentStats(): Result<AgentStatsResponseDto> {
+        log.d { "Fetching agent stats" }
+        return runCatching {
+            val response = window.fetch("$backendBaseUrl/api/v1/agents/stats").await()
+            val bodyText = response.text().await()
+
+            if (!response.ok) {
+                throw RuntimeException("Failed to fetch agent stats: ${response.status}")
+            }
+
+            json.decodeFromString(AgentStatsResponseDto.serializer(), bodyText)
+        }.onFailure { throwable ->
+            log.e(throwable) { "Failed to fetch agent stats" }
         }
     }
 

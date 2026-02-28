@@ -1,44 +1,12 @@
 package io.artemkopan.ai.backend.agent.ws
 
-import io.artemkopan.ai.core.application.model.CloseAgentCommand
-import io.artemkopan.ai.core.application.model.SelectAgentCommand
-import io.artemkopan.ai.core.application.model.SendAgentMessageCommand
-import io.artemkopan.ai.core.application.model.StopAgentMessageCommand
-import io.artemkopan.ai.core.application.model.UpdateAgentDraftCommand
+import io.artemkopan.ai.core.application.model.*
+import io.artemkopan.ai.core.application.usecase.*
 import io.artemkopan.ai.core.domain.model.AgentState
-import io.artemkopan.ai.core.application.usecase.CloseAgentUseCase
-import io.artemkopan.ai.core.application.usecase.CompleteAgentMessageCommand
-import io.artemkopan.ai.core.application.usecase.CompleteAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.CreateAgentUseCase
-import io.artemkopan.ai.core.application.usecase.FailAgentMessageCommand
-import io.artemkopan.ai.core.application.usecase.FailAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
-import io.artemkopan.ai.core.application.usecase.GetAgentStateUseCase
-import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
-import io.artemkopan.ai.core.application.usecase.SelectAgentUseCase
-import io.artemkopan.ai.core.application.usecase.StartAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.StopAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.UpdateAgentDraftUseCase
-import io.artemkopan.ai.sharedcontract.AgentOperationFailedDto
-import io.artemkopan.ai.sharedcontract.AgentWsClientMessageDto
-import io.artemkopan.ai.sharedcontract.AgentWsServerMessageDto
-import io.artemkopan.ai.sharedcontract.CloseAgentCommandDto
-import io.artemkopan.ai.sharedcontract.CreateAgentCommandDto
-import io.artemkopan.ai.sharedcontract.SelectAgentCommandDto
-import io.artemkopan.ai.sharedcontract.SendAgentMessageCommandDto
-import io.artemkopan.ai.sharedcontract.StopAgentMessageCommandDto
-import io.artemkopan.ai.sharedcontract.SubmitAgentCommandDto
-import io.artemkopan.ai.sharedcontract.SubscribeAgentsDto
-import io.artemkopan.ai.sharedcontract.UpdateAgentDraftCommandDto
-import io.ktor.server.websocket.DefaultWebSocketServerSession
-import io.ktor.websocket.Frame
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
+import io.artemkopan.ai.sharedcontract.*
+import io.ktor.server.websocket.*
+import io.ktor.websocket.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -115,6 +83,7 @@ class AgentWsMessageHandler(
                         temperature = parsed.temperature,
                         stopSequences = parsed.stopSequences,
                         agentMode = parsed.agentMode.name.lowercase(),
+                        contextConfig = parsed.contextConfig.toDomain(),
                     )
                 )
                     .onSuccess { state -> broadcastSnapshot(userScope, state) }

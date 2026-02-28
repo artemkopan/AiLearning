@@ -2,35 +2,11 @@ package io.artemkopan.ai.sharedui.state
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.artemkopan.ai.sharedcontract.AgentConfigDto
-import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
-import io.artemkopan.ai.sharedcontract.AgentMode
-import io.artemkopan.ai.sharedcontract.AgentOperationFailedDto
-import io.artemkopan.ai.sharedcontract.AgentStateSnapshotDto
-import io.artemkopan.ai.sharedcontract.AgentStateSnapshotMessageDto
-import io.artemkopan.ai.sharedcontract.AgentWsClientMessageDto
-import io.artemkopan.ai.sharedcontract.AgentWsServerMessageDto
-import io.artemkopan.ai.sharedcontract.CloseAgentCommandDto
-import io.artemkopan.ai.sharedcontract.CreateAgentCommandDto
-import io.artemkopan.ai.sharedcontract.SelectAgentCommandDto
-import io.artemkopan.ai.sharedcontract.SendAgentMessageCommandDto
-import io.artemkopan.ai.sharedcontract.StopAgentMessageCommandDto
-import io.artemkopan.ai.sharedcontract.SubscribeAgentsDto
-import io.artemkopan.ai.sharedcontract.UpdateAgentDraftCommandDto
-import io.artemkopan.ai.sharedui.gateway.AgentGateway
-import io.artemkopan.ai.sharedui.usecase.BuildUpdatedConfigWithModelMetadataUseCase
-import io.artemkopan.ai.sharedui.usecase.EnrichRuntimeStateUseCase
-import io.artemkopan.ai.sharedui.usecase.FilterTemperatureInputUseCase
-import io.artemkopan.ai.sharedui.usecase.MapSnapshotToUiStateUseCase
-import io.artemkopan.ai.sharedui.usecase.NormalizeAgentsForConfigUseCase
-import io.artemkopan.ai.sharedui.usecase.NormalizeModelUseCase
-import io.artemkopan.ai.sharedui.usecase.ObserveActiveModelSelectionUseCase
 import co.touchlab.kermit.Logger
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import io.artemkopan.ai.sharedcontract.*
+import io.artemkopan.ai.sharedui.gateway.AgentGateway
+import io.artemkopan.ai.sharedui.usecase.*
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class UsageResult(
@@ -75,8 +51,10 @@ data class AgentState(
     val stopSequences: String = "",
     val agentMode: AgentMode = AgentMode.DEFAULT,
     val status: String = STATUS_DONE,
+    val contextConfig: AgentContextConfigDto = RollingSummaryContextConfigDto(),
     val contextSummary: String = "",
     val summarizedUntilCreatedAt: Long = 0,
+    val contextSummaryUpdatedAt: Long = 0,
     val messages: List<AgentMessageState> = emptyList(),
     val draftMessage: String = "",
 ) {
@@ -102,6 +80,10 @@ sealed interface UiAction {
     data class TemperatureChanged(val value: String) : UiAction
     data class StopSequencesChanged(val value: String) : UiAction
     data class AgentModeChanged(val value: AgentMode) : UiAction
+    data class ContextStrategyChanged(val value: String) : UiAction
+    data class ContextRecentMessagesChanged(val value: String) : UiAction
+    data class ContextSummarizeEveryChanged(val value: String) : UiAction
+    data class InsertSlashToken(val value: String) : UiAction
     data object Submit : UiAction
     data class StopMessage(val messageId: String) : UiAction
     data object DismissError : UiAction
@@ -141,6 +123,10 @@ class AppViewModel(
             is UiAction.TemperatureChanged -> handleTemperatureChanged(action.value)
             is UiAction.StopSequencesChanged -> handleStopSequencesChanged(action.value)
             is UiAction.AgentModeChanged -> handleAgentModeChanged(action.value)
+            is UiAction.ContextStrategyChanged -> handleContextStrategyChanged(action.value)
+            is UiAction.ContextRecentMessagesChanged -> handleContextRecentMessagesChanged(action.value)
+            is UiAction.ContextSummarizeEveryChanged -> handleContextSummarizeEveryChanged(action.value)
+            is UiAction.InsertSlashToken -> handleInsertSlashToken(action.value)
             is UiAction.Submit -> handleSubmit()
             is UiAction.StopMessage -> handleStopMessage(action.messageId)
             is UiAction.DismissError -> handleDismissError()
@@ -235,6 +221,65 @@ class AppViewModel(
         sendActiveDraftUpdate()
     }
 
+    private fun handleContextStrategyChanged(value: String) {
+        updateActiveAgent { current ->
+            if (current.contextConfig.locked) return@updateActiveAgent current
+            when (value) {
+                "full_history" -> current.copy(
+                    contextConfig = FullHistoryContextConfigDto(locked = false)
+                )
+
+                else -> current.copy(
+                    contextConfig = RollingSummaryContextConfigDto(
+                        recentMessagesN = (current.contextConfig as? RollingSummaryContextConfigDto)?.recentMessagesN ?: 12,
+                        summarizeEveryK = (current.contextConfig as? RollingSummaryContextConfigDto)?.summarizeEveryK ?: 10,
+                        locked = false,
+                    )
+                )
+            }
+        }
+        sendActiveDraftUpdate()
+    }
+
+    private fun handleContextRecentMessagesChanged(value: String) {
+        val parsed = value.toIntOrNull() ?: return
+        if (parsed <= 0) return
+        updateActiveAgent { current ->
+            val config = current.contextConfig as? RollingSummaryContextConfigDto ?: return@updateActiveAgent current
+            if (config.locked) return@updateActiveAgent current
+            current.copy(
+                contextConfig = config.copy(recentMessagesN = parsed)
+            )
+        }
+        sendActiveDraftUpdate()
+    }
+
+    private fun handleContextSummarizeEveryChanged(value: String) {
+        val parsed = value.toIntOrNull() ?: return
+        if (parsed <= 0) return
+        updateActiveAgent { current ->
+            val config = current.contextConfig as? RollingSummaryContextConfigDto ?: return@updateActiveAgent current
+            if (config.locked) return@updateActiveAgent current
+            current.copy(
+                contextConfig = config.copy(summarizeEveryK = parsed)
+            )
+        }
+        sendActiveDraftUpdate()
+    }
+
+    private fun handleInsertSlashToken(value: String) {
+        updateActiveAgent { current ->
+            val draft = current.draftMessage
+            val trimmed = draft.trimEnd()
+            val normalized = when {
+                trimmed.endsWith("/") -> "${trimmed.dropLast(1).trimEnd()} $value"
+                trimmed.isEmpty() -> value
+                else -> "$trimmed $value"
+            }.trim()
+            current.copy(draftMessage = "$normalized ")
+        }
+    }
+
     private fun handleSubmit() {
         val active = getActiveAgent() ?: return
         val text = active.draftMessage.trim()
@@ -302,6 +347,7 @@ class AppViewModel(
                 temperature = agent.temperature,
                 stopSequences = agent.stopSequences,
                 agentMode = agent.agentMode,
+                contextConfig = agent.contextConfig,
             )
         }
     }

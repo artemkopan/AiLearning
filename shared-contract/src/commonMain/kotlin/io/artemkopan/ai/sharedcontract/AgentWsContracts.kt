@@ -34,6 +34,7 @@ data class UpdateAgentDraftCommandDto(
     val temperature: String,
     val stopSequences: String,
     val agentMode: AgentMode = AgentMode.DEFAULT,
+    val contextConfig: AgentContextConfigDto = RollingSummaryContextConfigDto(),
     val requestId: String? = null,
 ) : AgentWsClientMessageDto
 

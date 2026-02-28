@@ -6,48 +6,24 @@ import io.artemkopan.ai.backend.agent.ws.AgentWsSessionRegistry
 import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.backend.di.appModules
 import io.artemkopan.ai.core.application.error.AppError
-import io.artemkopan.ai.core.application.usecase.CloseAgentUseCase
-import io.artemkopan.ai.core.application.usecase.CompleteAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.CreateAgentUseCase
-import io.artemkopan.ai.core.application.usecase.FailAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.GetAgentStateUseCase
 import io.artemkopan.ai.core.application.model.GenerateCommand
-import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
-import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
-import io.artemkopan.ai.core.application.usecase.SelectAgentUseCase
-import io.artemkopan.ai.core.application.usecase.StartAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.StopAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.UpdateAgentDraftUseCase
+import io.artemkopan.ai.core.application.usecase.*
+import io.artemkopan.ai.core.application.usecase.stats.GetAgentStatsUseCase
 import io.artemkopan.ai.core.domain.repository.LlmRepository
-import io.artemkopan.ai.sharedcontract.AgentConfigDto
-import io.artemkopan.ai.sharedcontract.ErrorResponseDto
-import io.artemkopan.ai.sharedcontract.GenerateRequestDto
-import io.artemkopan.ai.sharedcontract.GenerateResponseDto
-import io.artemkopan.ai.sharedcontract.ModelMetadataDto
-import io.artemkopan.ai.sharedcontract.ModelOptionDto
-import io.artemkopan.ai.sharedcontract.TokenUsageDto
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpMethod
-import io.ktor.http.HttpStatusCode
-import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.application.Application
-import io.ktor.server.application.call
-import io.ktor.server.application.install
-import io.ktor.server.application.log
-import io.ktor.server.plugins.calllogging.CallLogging
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.plugins.cors.routing.CORS
-import io.ktor.server.plugins.doublereceive.DoubleReceive
-import io.ktor.server.plugins.statuspages.StatusPages
-import io.ktor.server.request.receive
-import io.ktor.server.response.respond
-import io.ktor.server.routing.get
-import io.ktor.server.routing.post
-import io.ktor.server.routing.routing
-import io.ktor.server.websocket.WebSockets
-import io.ktor.server.websocket.webSocket
-import io.ktor.websocket.Frame
-import io.ktor.websocket.readText
+import io.artemkopan.ai.sharedcontract.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.application.*
+import io.ktor.server.plugins.calllogging.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.plugins.cors.routing.*
+import io.ktor.server.plugins.doublereceive.*
+import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import io.ktor.server.websocket.*
+import io.ktor.websocket.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -55,7 +31,7 @@ import kotlinx.serialization.json.Json
 import org.koin.ktor.ext.inject
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
-import java.util.UUID
+import java.util.*
 
 private val RequestIdKey = io.ktor.util.AttributeKey<String>("requestId")
 
@@ -91,8 +67,10 @@ fun Application.module(
     val completeAgentMessageUseCase by inject<CompleteAgentMessageUseCase>()
     val failAgentMessageUseCase by inject<FailAgentMessageUseCase>()
     val stopAgentMessageUseCase by inject<StopAgentMessageUseCase>()
+    val getAgentStatsUseCase by inject<GetAgentStatsUseCase>()
     val injectedLlmRepository by inject<LlmRepository>()
     val llmRepository = llmRepositoryOverride ?: injectedLlmRepository
+    val statsMapper = AgentStatsHttpMapper()
 
     val appJson = Json {
         ignoreUnknownKeys = true
@@ -198,6 +176,19 @@ fun Application.module(
                     provider = metadata.provider,
                     inputTokenLimit = metadata.inputTokenLimit,
                     outputTokenLimit = metadata.outputTokenLimit,
+                )
+            )
+        }
+
+        get("/api/v1/agents/stats") {
+            val userScope = call.resolveUserScope()
+            val stats = getAgentStatsUseCase.execute(userScope).getOrElse { throwable ->
+                throw throwable
+            }
+            call.respond(
+                HttpStatusCode.OK,
+                AgentStatsResponseDto(
+                    agents = stats.map { statsMapper.toDto(it) }
                 )
             )
         }

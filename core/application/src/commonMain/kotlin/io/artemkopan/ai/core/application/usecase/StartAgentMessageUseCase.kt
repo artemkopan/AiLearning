@@ -3,12 +3,9 @@ package io.artemkopan.ai.core.application.usecase
 import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.model.SendAgentMessageCommand
-import io.artemkopan.ai.core.domain.model.AgentId
-import io.artemkopan.ai.core.domain.model.AgentMessage
-import io.artemkopan.ai.core.domain.model.AgentMessageId
-import io.artemkopan.ai.core.domain.model.AgentMessageRole
-import io.artemkopan.ai.core.domain.model.AgentState
-import io.artemkopan.ai.core.domain.model.AgentStatus
+import io.artemkopan.ai.core.application.usecase.context.PrepareAgentContextUseCase
+import io.artemkopan.ai.core.application.usecase.shortcut.ExpandStatsShortcutsInPromptUseCase
+import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import kotlin.random.Random
 
@@ -21,10 +18,11 @@ data class StartedAgentMessage(
 
 class StartAgentMessageUseCase(
     private val repository: AgentRepository,
-    private val maybeSummarizeContextUseCase: MaybeSummarizeContextUseCase,
+    private val prepareAgentContextUseCase: PrepareAgentContextUseCase,
     private val buildContextPromptUseCase: BuildContextPromptUseCase,
     private val retrieveRelevantContextUseCase: RetrieveRelevantContextUseCase,
     private val indexMessageEmbeddingsUseCase: IndexMessageEmbeddingsUseCase,
+    private val expandStatsShortcutsInPromptUseCase: ExpandStatsShortcutsInPromptUseCase,
 ) {
     suspend fun execute(userId: String, command: SendAgentMessageCommand): Result<StartedAgentMessage> {
         val domainUserId = parseUserIdOrError(userId).getOrElse { return Result.failure(it) }
@@ -67,7 +65,7 @@ class StartAgentMessageUseCase(
 
         val latestAgent = afterUser.agents.firstOrNull { it.id == agentId } ?: agent
         val persistedUserMessage = latestAgent.messages.firstOrNull { it.id == userMessage.id } ?: userMessage
-        val preparedContext = maybeSummarizeContextUseCase.execute(domainUserId, latestAgent).getOrElse {
+        val preparedContext = prepareAgentContextUseCase.execute(domainUserId, latestAgent).getOrElse {
             return Result.failure(it)
         }
         val retrievedMemory = retrieveRelevantContextUseCase.execute(
@@ -77,9 +75,22 @@ class StartAgentMessageUseCase(
         ).getOrElse {
             return Result.failure(it)
         }
+        val expandedLatestUserText = expandStatsShortcutsInPromptUseCase.execute(
+            userId = domainUserId,
+            prompt = persistedUserMessage.text,
+        ).getOrElse {
+            return Result.failure(it)
+        }
+        val promptMessages = preparedContext.recentMessages.map { message ->
+            if (message.id == persistedUserMessage.id) {
+                message.copy(text = expandedLatestUserText)
+            } else {
+                message
+            }
+        }
         val conversationPrompt = buildContextPromptUseCase.execute(
             summary = preparedContext.summaryText,
-            messages = preparedContext.recentMessages,
+            messages = promptMessages,
             retrievedMemory = retrievedMemory,
         )
         if (conversationPrompt.isBlank()) {

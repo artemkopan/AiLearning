@@ -45,6 +45,20 @@ data class RetrievedContextChunk(
     val createdAt: Long,
 )
 
+sealed interface AgentContextConfig {
+    val locked: Boolean
+}
+
+data class FullHistoryAgentContextConfig(
+    override val locked: Boolean = false,
+) : AgentContextConfig
+
+data class RollingSummaryAgentContextConfig(
+    val recentMessagesN: Int = DEFAULT_RECENT_MESSAGES_N,
+    val summarizeEveryK: Int = DEFAULT_SUMMARIZE_EVERY_K,
+    override val locked: Boolean = false,
+) : AgentContextConfig
+
 data class Agent(
     val id: AgentId,
     val title: String,
@@ -54,8 +68,10 @@ data class Agent(
     val stopSequences: String = "",
     val agentMode: String = "default",
     val status: AgentStatus = AgentStatus("done"),
+    val contextConfig: AgentContextConfig = RollingSummaryAgentContextConfig(),
     val contextSummary: String = "",
     val summarizedUntilCreatedAt: Long = 0,
+    val contextSummaryUpdatedAt: Long = 0,
     val messages: List<AgentMessage> = emptyList(),
 )
 
@@ -71,4 +87,8 @@ data class AgentDraft(
     val temperature: String,
     val stopSequences: String,
     val agentMode: String,
+    val contextConfig: AgentContextConfig,
 )
+
+const val DEFAULT_RECENT_MESSAGES_N = 12
+const val DEFAULT_SUMMARIZE_EVERY_K = 10

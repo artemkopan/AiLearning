@@ -2,33 +2,13 @@ package io.artemkopan.ai.backend.agent.persistence
 
 import co.touchlab.kermit.Logger
 import io.artemkopan.ai.backend.config.AppConfig
-import io.artemkopan.ai.core.domain.model.Agent
-import io.artemkopan.ai.core.domain.model.AgentContextMemory
-import io.artemkopan.ai.core.domain.model.AgentDraft
-import io.artemkopan.ai.core.domain.model.AgentId
-import io.artemkopan.ai.core.domain.model.AgentMessage
-import io.artemkopan.ai.core.domain.model.AgentMessageId
-import io.artemkopan.ai.core.domain.model.AgentMessageRole
-import io.artemkopan.ai.core.domain.model.AgentState
-import io.artemkopan.ai.core.domain.model.AgentStatus
-import io.artemkopan.ai.core.domain.model.AgentUsage
-import io.artemkopan.ai.core.domain.model.RetrievedContextChunk
-import io.artemkopan.ai.core.domain.model.UserId
+import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
 import kotlin.math.sqrt
 
 class PostgresAgentRepository(
@@ -66,6 +46,9 @@ class PostgresAgentRepository(
             row[temperature] = ""
             row[stopSequences] = ""
             row[agentMode] = "default"
+            row[contextStrategy] = CONTEXT_STRATEGY_ROLLING_SUMMARY
+            row[contextRecentMessagesN] = config.contextRecentMaxMessages
+            row[contextSummarizeEveryK] = config.contextSummarizeEveryMessages
             row[status] = STATUS_DONE
             row[ScopedAgentsTable.position] = position
             row[createdAt] = now
@@ -110,6 +93,9 @@ class PostgresAgentRepository(
         require(exists != null) { "Agent not found: ${agentId.value}" }
 
         val now = nowMillis()
+        val contextStrategy = contextStrategyValue(draft.contextConfig)
+        val contextRecentN = contextRecentMessagesNValue(draft.contextConfig)
+        val contextSummarizeEveryK = contextSummarizeEveryKValue(draft.contextConfig)
         ScopedAgentsTable.update({
             (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
         }) { row ->
@@ -118,6 +104,9 @@ class PostgresAgentRepository(
             row[temperature] = draft.temperature
             row[stopSequences] = draft.stopSequences
             row[agentMode] = draft.agentMode.ifBlank { "default" }
+            row[ScopedAgentsTable.contextStrategy] = contextStrategy
+            row[ScopedAgentsTable.contextRecentMessagesN] = contextRecentN
+            row[ScopedAgentsTable.contextSummarizeEveryK] = contextSummarizeEveryK
             row[updatedAt] = now
         }
 
@@ -562,6 +551,7 @@ class PostgresAgentRepository(
         messages: List<AgentMessage>,
         contextMemory: ResultRow?,
     ): Agent {
+        val hasUserMessages = messages.any { it.role == AgentMessageRole.USER }
         return Agent(
             id = AgentId(row[ScopedAgentsTable.id]),
             title = row[ScopedAgentsTable.title],
@@ -571,8 +561,10 @@ class PostgresAgentRepository(
             stopSequences = row[ScopedAgentsTable.stopSequences],
             agentMode = row[ScopedAgentsTable.agentMode],
             status = AgentStatus(row[ScopedAgentsTable.status]),
+            contextConfig = toContextConfig(row, hasUserMessages),
             contextSummary = contextMemory?.get(ScopedAgentContextMemoryTable.summaryText).orEmpty(),
             summarizedUntilCreatedAt = contextMemory?.get(ScopedAgentContextMemoryTable.summarizedUntilCreatedAt) ?: 0L,
+            contextSummaryUpdatedAt = contextMemory?.get(ScopedAgentContextMemoryTable.updatedAt) ?: 0L,
             messages = messages,
         )
     }
@@ -613,6 +605,44 @@ class PostgresAgentRepository(
         )
     }
 
+    private fun toContextConfig(row: ResultRow, locked: Boolean): AgentContextConfig {
+        return when (row[ScopedAgentsTable.contextStrategy]) {
+            CONTEXT_STRATEGY_FULL_HISTORY -> FullHistoryAgentContextConfig(locked = locked)
+            else -> RollingSummaryAgentContextConfig(
+                recentMessagesN = row[ScopedAgentsTable.contextRecentMessagesN]
+                    .takeIf { it > 0 }
+                    ?: config.contextRecentMaxMessages.takeIf { it > 0 }
+                    ?: DEFAULT_RECENT_MESSAGES_N,
+                summarizeEveryK = row[ScopedAgentsTable.contextSummarizeEveryK]
+                    .takeIf { it > 0 }
+                    ?: config.contextSummarizeEveryMessages.takeIf { it > 0 }
+                    ?: DEFAULT_SUMMARIZE_EVERY_K,
+                locked = locked,
+            )
+        }
+    }
+
+    private fun contextStrategyValue(config: AgentContextConfig): String {
+        return when (config) {
+            is FullHistoryAgentContextConfig -> CONTEXT_STRATEGY_FULL_HISTORY
+            is RollingSummaryAgentContextConfig -> CONTEXT_STRATEGY_ROLLING_SUMMARY
+        }
+    }
+
+    private fun contextRecentMessagesNValue(config: AgentContextConfig): Int {
+        return when (config) {
+            is FullHistoryAgentContextConfig -> config.contextDefaultRecentMessagesN()
+            is RollingSummaryAgentContextConfig -> config.recentMessagesN
+        }
+    }
+
+    private fun contextSummarizeEveryKValue(config: AgentContextConfig): Int {
+        return when (config) {
+            is FullHistoryAgentContextConfig -> config.contextDefaultSummarizeEveryK()
+            is RollingSummaryAgentContextConfig -> config.summarizeEveryK
+        }
+    }
+
     private fun serializeEmbedding(values: List<Double>): String {
         return values.joinToString(separator = ",") { it.toString() }
     }
@@ -643,6 +673,9 @@ class PostgresAgentRepository(
     private fun nowMillis(): Long = System.currentTimeMillis()
 }
 
+private fun FullHistoryAgentContextConfig.contextDefaultRecentMessagesN(): Int = DEFAULT_RECENT_MESSAGES_N
+private fun FullHistoryAgentContextConfig.contextDefaultSummarizeEveryK(): Int = DEFAULT_SUMMARIZE_EVERY_K
+
 private object ScopedAgentStateTable : Table("scoped_agent_state") {
     val userId = varchar("user_id", 128)
     val activeAgentId = varchar("active_agent_id", 64).nullable()
@@ -662,6 +695,9 @@ private object ScopedAgentsTable : Table("scoped_agents") {
     val temperature = varchar("temperature", 32)
     val stopSequences = text("stop_sequences")
     val agentMode = varchar("agent_mode", 32)
+    val contextStrategy = varchar("context_strategy", 64).default(CONTEXT_STRATEGY_ROLLING_SUMMARY)
+    val contextRecentMessagesN = integer("context_recent_messages_n").default(DEFAULT_RECENT_MESSAGES_N)
+    val contextSummarizeEveryK = integer("context_summarize_every_k").default(DEFAULT_SUMMARIZE_EVERY_K)
     val status = varchar("status", 255)
     val position = integer("position")
     val createdAt = long("created_at")
@@ -723,3 +759,5 @@ private const val STATUS_DONE = "done"
 private const val STATUS_PROCESSING = "processing"
 private const val ROLE_USER = "user"
 private const val ROLE_ASSISTANT = "assistant"
+private const val CONTEXT_STRATEGY_FULL_HISTORY = "full_history"
+private const val CONTEXT_STRATEGY_ROLLING_SUMMARY = "rolling_summary_recent_n"

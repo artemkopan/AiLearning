@@ -1,48 +1,22 @@
 package io.artemkopan.ai.sharedui.ui.screen
 
-import androidx.compose.foundation.LocalScrollbarStyle
-import androidx.compose.foundation.VerticalScrollbar
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
-import io.artemkopan.ai.sharedui.state.AgentMessageState
-import io.artemkopan.ai.sharedui.state.AgentState
-import io.artemkopan.ai.sharedui.state.AppViewModel
-import io.artemkopan.ai.sharedui.state.UiAction
-import io.artemkopan.ai.sharedui.state.UiState
-import io.artemkopan.ai.sharedui.ui.component.AgentModeSelector
-import io.artemkopan.ai.sharedui.ui.component.AgentSidePanel
-import io.artemkopan.ai.sharedui.ui.component.ConfigPanel
-import io.artemkopan.ai.sharedui.ui.component.CyberpunkPanel
-import io.artemkopan.ai.sharedui.ui.component.CyberpunkTextField
-import io.artemkopan.ai.sharedui.ui.component.ErrorDialog
-import io.artemkopan.ai.sharedui.ui.component.StatusPanel
-import io.artemkopan.ai.sharedui.ui.component.SubmitButton
+import io.artemkopan.ai.sharedui.state.*
+import io.artemkopan.ai.sharedui.ui.component.*
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkTheme
 
@@ -65,10 +39,48 @@ private fun AiAssistantContent(
 ) {
     val activeAgent = state.activeAgentId?.let { state.agents[it] }
     val orderedAgents = state.agentOrder.mapNotNull { state.agents[it] }
+    val rootFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        rootFocusRequester.requestFocus()
+    }
 
     CyberpunkTheme {
         Surface(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(rootFocusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when {
+                        event.isCtrlPressed && event.key == Key.Enter -> {
+                            onAction(UiAction.Submit)
+                            true
+                        }
+
+                        event.isAltPressed && event.key == Key.DirectionDown -> {
+                            nextAgentId(state.agentOrder, state.activeAgentId)?.let {
+                                onAction(UiAction.SelectAgent(it))
+                            }
+                            true
+                        }
+
+                        event.isAltPressed && event.key == Key.DirectionUp -> {
+                            previousAgentId(state.agentOrder, state.activeAgentId)?.let {
+                                onAction(UiAction.SelectAgent(it))
+                            }
+                            true
+                        }
+
+                        event.isAltPressed && event.key == Key.N -> {
+                            onAction(UiAction.CreateAgent)
+                            true
+                        }
+
+                        else -> false
+                    }
+                },
             color = CyberpunkColors.DarkBackground,
         ) {
             Column(
@@ -99,6 +111,7 @@ private fun AiAssistantContent(
                     if (activeAgent != null) {
                         CenterConversationColumn(
                             agent = activeAgent,
+                            allAgents = orderedAgents,
                             onAction = onAction,
                             modifier = Modifier
                                 .weight(1f)
@@ -150,6 +163,7 @@ private fun ScreenHeader() {
 @Composable
 private fun CenterConversationColumn(
     agent: AgentState,
+    allAgents: List<AgentState>,
     onAction: (UiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -215,6 +229,13 @@ private fun CenterConversationColumn(
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
             maxLines = 8,
+        )
+        SlashCommandPopup(
+            visible = agent.draftMessage.trimEnd().endsWith("/"),
+            agents = allAgents,
+            onInsertToken = { token -> onAction(UiAction.InsertSlashToken(token)) },
+            onDismiss = {},
+            modifier = Modifier.fillMaxWidth(),
         )
 
         SubmitButton(
@@ -299,37 +320,62 @@ private fun SettingsColumn(
     onAction: (UiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        AgentModeSelector(
-            selected = agent.agentMode,
-            onModeSelected = { onAction(UiAction.AgentModeChanged(it)) },
-            modifier = Modifier.fillMaxWidth(),
-        )
+    val scrollState = rememberScrollState()
 
-        ConfigPanel(
-            model = agent.model,
-            onModelChanged = { onAction(UiAction.ModelChanged(it)) },
-            maxOutputTokens = agent.maxOutputTokens,
-            onMaxOutputTokensChanged = { onAction(UiAction.MaxOutputTokensChanged(it)) },
-            temperature = agent.temperature,
-            onTemperatureChanged = { onAction(UiAction.TemperatureChanged(it)) },
-            stopSequences = agent.stopSequences,
-            onStopSequencesChanged = { onAction(UiAction.StopSequencesChanged(it)) },
-            models = agentConfig?.models.orEmpty(),
-            temperaturePlaceholder = agentConfig?.let {
-                "${it.temperatureMin} – ${it.temperatureMax}"
-            } ?: "0.0 – 2.0",
-            modifier = Modifier.fillMaxWidth(),
-        )
+    Box(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(end = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AgentModeSelector(
+                selected = agent.agentMode,
+                onModeSelected = { onAction(UiAction.AgentModeChanged(it)) },
+                modifier = Modifier.fillMaxWidth(),
+            )
 
-        RuntimeInfoPanel(
-            agent = agent,
-            contextTotalTokensLabel = contextTotalTokensLabel,
-            contextLeftLabel = contextLeftLabel,
-            modifier = Modifier.fillMaxWidth(),
+            ConfigPanel(
+                model = agent.model,
+                onModelChanged = { onAction(UiAction.ModelChanged(it)) },
+                maxOutputTokens = agent.maxOutputTokens,
+                onMaxOutputTokensChanged = { onAction(UiAction.MaxOutputTokensChanged(it)) },
+                temperature = agent.temperature,
+                onTemperatureChanged = { onAction(UiAction.TemperatureChanged(it)) },
+                stopSequences = agent.stopSequences,
+                onStopSequencesChanged = { onAction(UiAction.StopSequencesChanged(it)) },
+                models = agentConfig?.models.orEmpty(),
+                temperaturePlaceholder = agentConfig?.let {
+                    "${it.temperatureMin} – ${it.temperatureMax}"
+                } ?: "0.0 – 2.0",
+                modifier = Modifier.fillMaxWidth(),
+            )
+            ContextConfigPanel(
+                contextConfig = agent.contextConfig,
+                onStrategyChanged = { onAction(UiAction.ContextStrategyChanged(it)) },
+                onRecentMessagesChanged = { onAction(UiAction.ContextRecentMessagesChanged(it)) },
+                onSummarizeEveryChanged = { onAction(UiAction.ContextSummarizeEveryChanged(it)) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            RuntimeInfoPanel(
+                agent = agent,
+                contextTotalTokensLabel = contextTotalTokensLabel,
+                contextLeftLabel = contextLeftLabel,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        VerticalScrollbar(
+            adapter = rememberScrollbarAdapter(scrollState),
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight(),
+            style = LocalScrollbarStyle.current.copy(
+                unhoverColor = CyberpunkColors.TextPrimary.copy(alpha = 0.5f),
+                hoverColor = CyberpunkColors.TextPrimary,
+            ),
         )
     }
 }
@@ -371,4 +417,16 @@ private fun RuntimeInfoPanel(
             color = CyberpunkColors.TextMuted,
         )
     }
+}
+
+private fun nextAgentId(order: List<AgentId>, activeAgentId: AgentId?): AgentId? {
+    if (order.isEmpty()) return null
+    val currentIndex = order.indexOf(activeAgentId).takeIf { it >= 0 } ?: 0
+    return order[(currentIndex + 1) % order.size]
+}
+
+private fun previousAgentId(order: List<AgentId>, activeAgentId: AgentId?): AgentId? {
+    if (order.isEmpty()) return null
+    val currentIndex = order.indexOf(activeAgentId).takeIf { it >= 0 } ?: 0
+    return order[(currentIndex - 1 + order.size) % order.size]
 }

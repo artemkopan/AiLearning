@@ -8,6 +8,7 @@ data class AppConfig(
     val corsOrigin: String,
     val contextSummaryTriggerTokens: Int = 3_000,
     val contextRecentMaxMessages: Int = 12,
+    val contextSummarizeEveryMessages: Int = 10,
     val contextSummaryMaxOutputTokens: Int = 300,
     val contextSummaryModel: String? = null,
     val contextEmbeddingModel: String = "gemini-embedding-001",
@@ -36,6 +37,9 @@ data class AppConfig(
         }
         require(contextRecentMaxMessages > 0) {
             "CONTEXT_RECENT_MAX_MESSAGES must be greater than 0."
+        }
+        require(contextSummarizeEveryMessages > 0) {
+            "CONTEXT_SUMMARIZE_EVERY_MESSAGES must be greater than 0."
         }
         require(contextSummaryMaxOutputTokens > 0) {
             "CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS must be greater than 0."
@@ -70,6 +74,8 @@ data class AppConfig(
                     ?: 3_000,
                 contextRecentMaxMessages = env["CONTEXT_RECENT_MAX_MESSAGES"]?.toIntOrNull()
                     ?: 12,
+                contextSummarizeEveryMessages = env["CONTEXT_SUMMARIZE_EVERY_MESSAGES"]?.toIntOrNull()
+                    ?: 10,
                 contextSummaryMaxOutputTokens = env["CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS"]?.toIntOrNull()
                     ?: 300,
                 contextSummaryModel = env["CONTEXT_SUMMARY_MODEL"]?.trim()?.takeIf { it.isNotEmpty() },

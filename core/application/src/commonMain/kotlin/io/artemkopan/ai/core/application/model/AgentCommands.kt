@@ -1,5 +1,7 @@
 package io.artemkopan.ai.core.application.model
 
+import io.artemkopan.ai.core.domain.model.AgentContextConfig
+
 data class SelectAgentCommand(
     val agentId: String,
 )
@@ -11,6 +13,7 @@ data class UpdateAgentDraftCommand(
     val temperature: String,
     val stopSequences: String,
     val agentMode: String,
+    val contextConfig: AgentContextConfig,
 )
 
 data class CloseAgentCommand(

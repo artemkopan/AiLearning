@@ -1,42 +1,27 @@
 package io.artemkopan.ai.backend.di
 
-import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.backend.agent.persistence.PostgresAgentRepository
-import io.artemkopan.ai.core.application.usecase.BuildContextPromptUseCase
-import io.artemkopan.ai.core.application.usecase.CompleteAgentMessageUseCase
+import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.core.application.mapper.DomainErrorMapper
-import io.artemkopan.ai.core.application.usecase.CloseAgentUseCase
-import io.artemkopan.ai.core.application.usecase.CreateAgentUseCase
-import io.artemkopan.ai.core.application.usecase.EstimatePromptTokensUseCase
-import io.artemkopan.ai.core.application.usecase.FailAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.GenerateTextUseCase
-import io.artemkopan.ai.core.application.usecase.GetAgentStateUseCase
-import io.artemkopan.ai.core.application.usecase.IndexMessageEmbeddingsUseCase
-import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
-import io.artemkopan.ai.core.application.usecase.MaybeSummarizeContextUseCase
-import io.artemkopan.ai.core.application.usecase.RetrieveRelevantContextUseCase
-import io.artemkopan.ai.core.application.usecase.ResolveAgentModeUseCase
-import io.artemkopan.ai.core.application.usecase.ResolveGenerationOptionsUseCase
-import io.artemkopan.ai.core.application.usecase.SelectAgentUseCase
-import io.artemkopan.ai.core.application.usecase.SetAgentStatusUseCase
-import io.artemkopan.ai.core.application.usecase.StartAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.StopAgentMessageUseCase
-import io.artemkopan.ai.core.application.usecase.UpdateAgentDraftUseCase
-import io.artemkopan.ai.core.application.usecase.ValidatePromptUseCase
+import io.artemkopan.ai.core.application.usecase.*
+import io.artemkopan.ai.core.application.usecase.context.*
+import io.artemkopan.ai.core.application.usecase.shortcut.ExpandStatsShortcutsInPromptUseCase
+import io.artemkopan.ai.core.application.usecase.shortcut.ParseStatsShortcutTokensUseCase
+import io.artemkopan.ai.core.application.usecase.shortcut.ResolveStatsShortcutsUseCase
+import io.artemkopan.ai.core.application.usecase.stats.BuildAgentStatsSnippetUseCase
+import io.artemkopan.ai.core.application.usecase.stats.GetAgentStatsUseCase
 import io.artemkopan.ai.core.data.client.GeminiNetworkClient
 import io.artemkopan.ai.core.data.client.LlmNetworkClient
 import io.artemkopan.ai.core.data.repository.GeminiLlmRepository
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.core.domain.repository.LlmRepository
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.logging.LogLevel
-import io.ktor.client.plugins.logging.Logger
-import io.ktor.client.plugins.logging.Logging
-import io.ktor.http.HttpHeaders
-import io.ktor.serialization.kotlinx.json.json
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.plugins.logging.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import org.koin.dsl.module
 import org.slf4j.LoggerFactory
@@ -118,19 +103,24 @@ val applicationModule = module {
     single { CloseAgentUseCase(repository = get()) }
     single { SetAgentStatusUseCase(repository = get()) }
     single { BuildContextPromptUseCase() }
+    single { ShouldSummarizeUseCase() }
+    single { BuildSummaryPromptUseCase() }
+    single { PersistContextSummaryUseCase(repository = get()) }
+    single { FullHistoryContextPreparationStrategy() }
     single {
         val config = get<AppConfig>()
-        MaybeSummarizeContextUseCase(
+        RollingSummaryContextPreparationStrategy(
             repository = get(),
             generateTextUseCase = get(),
-            buildContextPromptUseCase = get(),
-            estimatePromptTokensUseCase = get(),
-            summaryTriggerTokens = config.contextSummaryTriggerTokens,
-            recentMessagesMax = config.contextRecentMaxMessages,
+            shouldSummarizeUseCase = get(),
+            buildSummaryPromptUseCase = get(),
+            persistContextSummaryUseCase = get(),
             summaryMaxOutputTokens = config.contextSummaryMaxOutputTokens,
             summaryModelOverride = config.contextSummaryModel,
         )
     }
+    single { ContextPreparationStrategyRegistry(fullHistoryStrategy = get(), rollingSummaryStrategy = get()) }
+    single { PrepareAgentContextUseCase(strategyRegistry = get()) }
     single {
         val config = get<AppConfig>()
         IndexMessageEmbeddingsUseCase(
@@ -151,12 +141,25 @@ val applicationModule = module {
         )
     }
     single {
+        GetAgentStatsUseCase(
+            repository = get(),
+            buildContextPromptUseCase = get(),
+            estimatePromptTokensUseCase = get(),
+            resolveAgentModeUseCase = get(),
+        )
+    }
+    single { BuildAgentStatsSnippetUseCase() }
+    single { ParseStatsShortcutTokensUseCase() }
+    single { ResolveStatsShortcutsUseCase(getAgentStatsUseCase = get(), buildAgentStatsSnippetUseCase = get()) }
+    single { ExpandStatsShortcutsInPromptUseCase(parseStatsShortcutTokensUseCase = get(), resolveStatsShortcutsUseCase = get()) }
+    single {
         StartAgentMessageUseCase(
             repository = get(),
-            maybeSummarizeContextUseCase = get(),
+            prepareAgentContextUseCase = get(),
             buildContextPromptUseCase = get(),
             retrieveRelevantContextUseCase = get(),
             indexMessageEmbeddingsUseCase = get(),
+            expandStatsShortcutsInPromptUseCase = get(),
         )
     }
     single {
