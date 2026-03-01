@@ -1,19 +1,21 @@
 package io.artemkopan.ai.sharedui.di
 
+import io.artemkopan.ai.sharedui.core.session.AgentId
+import io.artemkopan.ai.sharedui.core.session.AgentSessionStore
+import io.artemkopan.ai.sharedui.factory.KoinSharedUiViewModelFactory
+import io.artemkopan.ai.sharedui.factory.SharedUiViewModelFactory
+import io.artemkopan.ai.sharedui.feature.agentssidepanel.viewmodel.AgentsSidePanelViewModel
+import io.artemkopan.ai.sharedui.feature.configpanel.viewmodel.ConfigPanelViewModel
+import io.artemkopan.ai.sharedui.feature.conversationcolumn.viewmodel.ConversationColumnViewModel
+import io.artemkopan.ai.sharedui.feature.errordialog.viewmodel.ErrorDialogViewModel
+import io.artemkopan.ai.sharedui.feature.root.viewmodel.RootViewModel
+import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
 import io.artemkopan.ai.sharedui.gateway.AgentGateway
-import io.artemkopan.ai.sharedui.state.AppViewModel
-import io.artemkopan.ai.sharedui.usecase.BuildUpdatedConfigWithModelMetadataUseCase
-import io.artemkopan.ai.sharedui.usecase.ComputeContextLeftLabelUseCase
-import io.artemkopan.ai.sharedui.usecase.EnrichRuntimeStateUseCase
-import io.artemkopan.ai.sharedui.usecase.FilterTemperatureInputUseCase
-import io.artemkopan.ai.sharedui.usecase.MapSnapshotToUiStateUseCase
-import io.artemkopan.ai.sharedui.usecase.NormalizeAgentsForConfigUseCase
-import io.artemkopan.ai.sharedui.usecase.NormalizeModelUseCase
-import io.artemkopan.ai.sharedui.usecase.ObserveActiveModelSelectionUseCase
+import io.artemkopan.ai.sharedui.usecase.*
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
-val sharedUiModule = module {
+val sharedUiFeatureModule = module {
     single { NormalizeModelUseCase() }
     single { FilterTemperatureInputUseCase() }
     single { NormalizeAgentsForConfigUseCase(normalizeModelUseCase = get()) }
@@ -23,8 +25,8 @@ val sharedUiModule = module {
     single { ComputeContextLeftLabelUseCase() }
     single { EnrichRuntimeStateUseCase(computeContextLeftLabelUseCase = get()) }
 
-    viewModel {
-        AppViewModel(
+    single {
+        AgentSessionStore(
             gateway = get(),
             normalizeModelUseCase = get(),
             filterTemperatureInputUseCase = get(),
@@ -33,11 +35,41 @@ val sharedUiModule = module {
             observeActiveModelSelectionUseCase = get(),
             buildUpdatedConfigWithModelMetadataUseCase = get(),
             enrichRuntimeStateUseCase = get(),
+        ).also { it.start() }
+    }
+
+    viewModel {
+        RootViewModel(sessionStore = get())
+    }
+    viewModel {
+        AgentsSidePanelViewModel(sessionStore = get())
+    }
+    viewModel {
+        ErrorDialogViewModel(sessionStore = get())
+    }
+    viewModel { (agentId: AgentId) ->
+        ConversationColumnViewModel(
+            agentId = agentId,
+            sessionStore = get(),
         )
     }
+    viewModel { (agentId: AgentId) ->
+        SettingsColumnViewModel(
+            agentId = agentId,
+            sessionStore = get(),
+        )
+    }
+    viewModel { (agentId: AgentId) ->
+        ConfigPanelViewModel(
+            agentId = agentId,
+            sessionStore = get(),
+        )
+    }
+
+    single<SharedUiViewModelFactory> { KoinSharedUiViewModelFactory() }
 }
 
-fun sharedUiModules(gateway: AgentGateway) = listOf(
+fun sharedUiFeatureModules(gateway: AgentGateway) = listOf(
     module { single<AgentGateway> { gateway } },
-    sharedUiModule,
+    sharedUiFeatureModule,
 )

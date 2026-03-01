@@ -1,0 +1,140 @@
+package io.artemkopan.ai.sharedui.feature.root.view
+
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.unit.dp
+import io.artemkopan.ai.sharedui.factory.SharedUiViewModelFactory
+import io.artemkopan.ai.sharedui.feature.agentssidepanel.view.AgentsSidePanelFeature
+import io.artemkopan.ai.sharedui.feature.conversationcolumn.view.ConversationColumnFeature
+import io.artemkopan.ai.sharedui.feature.errordialog.view.ErrorDialogFeature
+import io.artemkopan.ai.sharedui.feature.root.viewmodel.RootViewModel
+import io.artemkopan.ai.sharedui.feature.settingscolumn.view.SettingsColumnFeature
+import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
+import io.artemkopan.ai.sharedui.ui.theme.CyberpunkTheme
+
+@Composable
+fun AiAssistantScreen(
+    factory: SharedUiViewModelFactory,
+) {
+    val rootViewModel: RootViewModel = factory.root()
+    val rootState by rootViewModel.state.collectAsState()
+
+    val agentsViewModel = factory.agentsSidePanel()
+    val errorDialogViewModel = factory.errorDialog()
+
+    val activeAgentId = rootState.activeAgentId
+    val conversationViewModel = activeAgentId?.let { factory.conversation(it) }
+    val settingsViewModel = activeAgentId?.let { factory.settings(it) }
+    val configViewModel = activeAgentId?.let { factory.config(it) }
+
+    val rootFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        rootFocusRequester.requestFocus()
+    }
+
+    CyberpunkTheme {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .focusRequester(rootFocusRequester)
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when {
+                        event.isCtrlPressed && event.key == Key.Enter -> {
+                            rootViewModel.onSubmitShortcut()
+                            true
+                        }
+
+                        event.isAltPressed && event.key == Key.DirectionDown -> {
+                            rootViewModel.onSelectNextAgentShortcut()
+                            true
+                        }
+
+                        event.isAltPressed && event.key == Key.DirectionUp -> {
+                            rootViewModel.onSelectPreviousAgentShortcut()
+                            true
+                        }
+
+                        event.isAltPressed && event.key == Key.N -> {
+                            rootViewModel.onCreateAgentShortcut()
+                            true
+                        }
+
+                        else -> false
+                    }
+                },
+            color = CyberpunkColors.DarkBackground,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                ScreenHeader()
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    AgentsSidePanelFeature(
+                        viewModel = agentsViewModel,
+                        modifier = Modifier
+                            .width(180.dp)
+                            .fillMaxHeight(),
+                    )
+
+                    if (conversationViewModel != null) {
+                        ConversationColumnFeature(
+                            viewModel = conversationViewModel,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                        )
+                    }
+
+                    if (settingsViewModel != null && configViewModel != null) {
+                        SettingsColumnFeature(
+                            settingsViewModel = settingsViewModel,
+                            configViewModel = configViewModel,
+                            modifier = Modifier
+                                .width(220.dp)
+                                .fillMaxHeight(),
+                        )
+                    }
+                }
+            }
+        }
+
+        ErrorDialogFeature(viewModel = errorDialogViewModel)
+    }
+}
+
+@Composable
+private fun ScreenHeader() {
+    Column {
+        Text(
+            text = "AI assistant",
+            style = MaterialTheme.typography.headlineSmall,
+            color = CyberpunkColors.Yellow,
+        )
+        HorizontalDivider(
+            modifier = Modifier.padding(top = 6.dp),
+            thickness = 2.dp,
+            color = CyberpunkColors.Yellow.copy(alpha = 0.4f),
+        )
+    }
+}

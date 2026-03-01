@@ -1,8 +1,8 @@
 package io.artemkopan.ai.sharedui.usecase
 
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
-import io.artemkopan.ai.sharedui.state.AgentId
-import io.artemkopan.ai.sharedui.state.AgentState
+import io.artemkopan.ai.sharedui.core.session.AgentId
+import io.artemkopan.ai.sharedui.core.session.AgentState
 
 data class NormalizedAgentsForConfigResult(
     val agents: Map<AgentId, AgentState>,

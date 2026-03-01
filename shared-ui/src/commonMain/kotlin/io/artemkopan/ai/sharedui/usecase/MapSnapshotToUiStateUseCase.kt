@@ -2,10 +2,10 @@ package io.artemkopan.ai.sharedui.usecase
 
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.AgentStateSnapshotDto
-import io.artemkopan.ai.sharedui.state.AgentId
-import io.artemkopan.ai.sharedui.state.AgentMessageState
-import io.artemkopan.ai.sharedui.state.AgentState
-import io.artemkopan.ai.sharedui.state.UsageResult
+import io.artemkopan.ai.sharedui.core.session.AgentId
+import io.artemkopan.ai.sharedui.core.session.AgentMessageState
+import io.artemkopan.ai.sharedui.core.session.AgentState
+import io.artemkopan.ai.sharedui.core.session.UsageResult
 
 data class SnapshotUiStateResult(
     val agents: Map<AgentId, AgentState>,

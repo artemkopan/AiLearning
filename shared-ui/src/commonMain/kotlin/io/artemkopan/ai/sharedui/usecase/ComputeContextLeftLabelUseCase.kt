@@ -2,7 +2,8 @@ package io.artemkopan.ai.sharedui.usecase
 
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.FullHistoryContextConfigDto
-import io.artemkopan.ai.sharedui.state.AgentState
+import io.artemkopan.ai.sharedui.core.session.AgentState
+import io.artemkopan.ai.sharedui.core.session.STATUS_STOPPED
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.round
@@ -62,5 +63,3 @@ class ComputeContextLeftLabelUseCase {
         return if (rounded % 1.0 == 0.0) rounded.toInt().toString() else rounded.toString()
     }
 }
-
-private const val STATUS_STOPPED = "stopped"

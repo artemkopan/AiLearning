@@ -1,254 +1,89 @@
 package io.artemkopan.ai.backend.agent.persistence
 
-import co.touchlab.kermit.Logger
-import io.artemkopan.ai.backend.config.AppConfig
+import io.artemkopan.ai.backend.agent.persistence.operation.*
 import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.transaction
-import kotlin.math.sqrt
 
-class PostgresAgentRepository(
-    private val config: AppConfig,
+class PostgresAgentRepository internal constructor(
+    private val getStateOperation: Lazy<GetStateOperation>,
+    private val createAgentOperation: Lazy<CreateAgentOperation>,
+    private val selectAgentOperation: Lazy<SelectAgentOperation>,
+    private val updateAgentDraftOperation: Lazy<UpdateAgentDraftOperation>,
+    private val closeAgentOperation: Lazy<CloseAgentOperation>,
+    private val updateAgentStatusOperation: Lazy<UpdateAgentStatusOperation>,
+    private val appendMessageOperation: Lazy<AppendMessageOperation>,
+    private val updateMessageOperation: Lazy<UpdateMessageOperation>,
+    private val findMessageOperation: Lazy<FindMessageOperation>,
+    private val hasProcessingMessageOperation: Lazy<HasProcessingMessageOperation>,
+    private val getContextMemoryOperation: Lazy<GetContextMemoryOperation>,
+    private val upsertContextMemoryOperation: Lazy<UpsertContextMemoryOperation>,
+    private val listMessagesAfterOperation: Lazy<ListMessagesAfterOperation>,
+    private val upsertMessageEmbeddingOperation: Lazy<UpsertMessageEmbeddingOperation>,
+    private val searchRelevantContextOperation: Lazy<SearchRelevantContextOperation>,
+    private val getAgentFactsOperation: Lazy<GetAgentFactsOperation>,
+    private val upsertAgentFactsOperation: Lazy<UpsertAgentFactsOperation>,
+    private val createBranchOperation: Lazy<CreateBranchOperation>,
+    private val switchBranchOperation: Lazy<SwitchBranchOperation>,
+    private val deleteBranchOperation: Lazy<DeleteBranchOperation>,
+    private val getBranchesOperation: Lazy<GetBranchesOperation>,
 ) : AgentRepository {
 
-    private val log = Logger.withTag("PostgresAgentRepository")
-    private val initLock = Any()
-
-    @Volatile
-    private var initialized = false
-
-    override suspend fun getState(userId: UserId): Result<AgentState> = runDb {
-        readStateTx(userId)
+    override suspend fun getState(userId: UserId): Result<AgentState> {
+        return getStateOperation.value.execute(userId = lazyArg { userId })
     }
 
-    override suspend fun createAgent(userId: UserId): Result<AgentState> = runDb {
-        val meta = loadMetaTx(userId)
-        val counter = meta[ScopedAgentStateTable.nextAgentCounter]
-        val newId = "agent-$counter"
-        val position = ScopedAgentsTable.selectAll()
-            .where { ScopedAgentsTable.userId eq userId.value }
-            .map { it[ScopedAgentsTable.position] }
-            .maxOrNull()
-            ?.plus(1)
-            ?: 0
-        val now = nowMillis()
-
-        ScopedAgentsTable.insert { row ->
-            row[ScopedAgentsTable.userId] = userId.value
-            row[id] = newId
-            row[title] = "Agent $counter"
-            row[model] = ""
-            row[maxOutputTokens] = ""
-            row[temperature] = ""
-            row[stopSequences] = ""
-            row[agentMode] = "default"
-            row[contextStrategy] = CONTEXT_STRATEGY_ROLLING_SUMMARY
-            row[contextRecentMessagesN] = config.contextRecentMaxMessages
-            row[contextSummarizeEveryK] = config.contextSummarizeEveryMessages
-            row[status] = STATUS_DONE
-            row[ScopedAgentsTable.position] = position
-            row[createdAt] = now
-            row[updatedAt] = now
-        }
-
-        ScopedAgentStateTable.update({ ScopedAgentStateTable.userId eq userId.value }) { row ->
-            row[activeAgentId] = newId
-            row[nextAgentCounter] = counter + 1
-            row[version] = meta[ScopedAgentStateTable.version] + 1
-            row[updatedAt] = now
-        }
-
-        readStateTx(userId)
+    override suspend fun createAgent(userId: UserId): Result<AgentState> {
+        return createAgentOperation.value.execute(userId = lazyArg { userId })
     }
 
-    override suspend fun selectAgent(userId: UserId, agentId: AgentId): Result<AgentState> = runDb {
-        val exists = ScopedAgentsTable.selectAll()
-            .where { (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value) }
-            .any()
-        require(exists) { "Agent not found: ${agentId.value}" }
-
-        val meta = loadMetaTx(userId)
-        val now = nowMillis()
-        ScopedAgentStateTable.update({ ScopedAgentStateTable.userId eq userId.value }) { row ->
-            row[activeAgentId] = agentId.value
-            row[version] = meta[ScopedAgentStateTable.version] + 1
-            row[updatedAt] = now
-        }
-
-        readStateTx(userId)
+    override suspend fun selectAgent(userId: UserId, agentId: AgentId): Result<AgentState> {
+        return selectAgentOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+        )
     }
 
     override suspend fun updateAgentDraft(
         userId: UserId,
         agentId: AgentId,
         draft: AgentDraft,
-    ): Result<AgentState> = runDb {
-        val exists = ScopedAgentsTable.selectAll().where {
-            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-        }.singleOrNull()
-        require(exists != null) { "Agent not found: ${agentId.value}" }
-
-        val now = nowMillis()
-        val contextStrategy = contextStrategyValue(draft.contextConfig)
-        val contextRecentN = contextRecentMessagesNValue(draft.contextConfig)
-        val contextSummarizeEveryK = contextSummarizeEveryKValue(draft.contextConfig)
-        ScopedAgentsTable.update({
-            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-        }) { row ->
-            row[model] = draft.model
-            row[maxOutputTokens] = draft.maxOutputTokens
-            row[temperature] = draft.temperature
-            row[stopSequences] = draft.stopSequences
-            row[agentMode] = draft.agentMode.ifBlank { "default" }
-            row[ScopedAgentsTable.contextStrategy] = contextStrategy
-            row[ScopedAgentsTable.contextRecentMessagesN] = contextRecentN
-            row[ScopedAgentsTable.contextSummarizeEveryK] = contextSummarizeEveryK
-            row[updatedAt] = now
-        }
-
-        bumpVersionTx(userId, now)
-        readStateTx(userId)
+    ): Result<AgentState> {
+        return updateAgentDraftOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            draft = lazyArg { draft },
+        )
     }
 
-    override suspend fun closeAgent(userId: UserId, agentId: AgentId): Result<AgentState> = runDb {
-        val allBefore = ScopedAgentsTable.selectAll()
-            .where { ScopedAgentsTable.userId eq userId.value }
-            .orderBy(ScopedAgentsTable.position, SortOrder.ASC)
-            .map { it[ScopedAgentsTable.id] }
-        val closedIndex = allBefore.indexOf(agentId.value)
-        require(closedIndex >= 0) { "Agent not found: ${agentId.value}" }
-
-        ScopedAgentMessagesTable.deleteWhere {
-            (ScopedAgentMessagesTable.userId eq userId.value) and (ScopedAgentMessagesTable.agentId eq agentId.value)
-        }
-        ScopedAgentContextMemoryTable.deleteWhere {
-            (ScopedAgentContextMemoryTable.userId eq userId.value) and
-                (ScopedAgentContextMemoryTable.agentId eq agentId.value)
-        }
-        ScopedAgentMessageEmbeddingsTable.deleteWhere {
-            (ScopedAgentMessageEmbeddingsTable.userId eq userId.value) and
-                (ScopedAgentMessageEmbeddingsTable.agentId eq agentId.value)
-        }
-        ScopedAgentFactsTable.deleteWhere {
-            (ScopedAgentFactsTable.userId eq userId.value) and
-                (ScopedAgentFactsTable.agentId eq agentId.value)
-        }
-        ScopedAgentBranchesTable.deleteWhere {
-            (ScopedAgentBranchesTable.userId eq userId.value) and
-                (ScopedAgentBranchesTable.agentId eq agentId.value)
-        }
-        ScopedAgentsTable.deleteWhere {
-            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-        }
-
-        val remaining = ScopedAgentsTable.selectAll()
-            .where { ScopedAgentsTable.userId eq userId.value }
-            .orderBy(ScopedAgentsTable.position, SortOrder.ASC)
-            .map { it[ScopedAgentsTable.id] }
-
-        val meta = loadMetaTx(userId)
-        val currentActive = meta[ScopedAgentStateTable.activeAgentId]
-        val newActive = when {
-            remaining.isEmpty() -> null
-            currentActive == agentId.value -> {
-                if (closedIndex >= remaining.size) remaining.last() else remaining[closedIndex]
-            }
-            currentActive != null && remaining.contains(currentActive) -> currentActive
-            else -> remaining.first()
-        }
-
-        val now = nowMillis()
-        ScopedAgentStateTable.update({ ScopedAgentStateTable.userId eq userId.value }) { row ->
-            row[activeAgentId] = newActive
-            row[version] = meta[ScopedAgentStateTable.version] + 1
-            row[updatedAt] = now
-        }
-
-        readStateTx(userId)
+    override suspend fun closeAgent(userId: UserId, agentId: AgentId): Result<AgentState> {
+        return closeAgentOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+        )
     }
 
     override suspend fun updateAgentStatus(
         userId: UserId,
         agentId: AgentId,
         status: AgentStatus,
-    ): Result<AgentState> = runDb {
-        val updated = ScopedAgentsTable.update({
-            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-        }) { row ->
-            row[ScopedAgentsTable.status] = status.value
-            row[updatedAt] = nowMillis()
-        }
-        require(updated > 0) { "Agent not found: ${agentId.value}" }
-
-        bumpVersionTx(userId)
-        readStateTx(userId)
+    ): Result<AgentState> {
+        return updateAgentStatusOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            status = lazyArg { status },
+        )
     }
 
     override suspend fun appendMessage(
         userId: UserId,
         agentId: AgentId,
         message: AgentMessage,
-    ): Result<AgentState> = runDb {
-        val existing = ScopedAgentsTable.selectAll().where {
-            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-        }.singleOrNull()
-        require(existing != null) { "Agent not found: ${agentId.value}" }
-
-        val currentMaxCreatedAt = ScopedAgentMessagesTable.selectAll()
-            .where {
-                (ScopedAgentMessagesTable.userId eq userId.value) and
-                    (ScopedAgentMessagesTable.agentId eq agentId.value)
-            }
-            .map { it[ScopedAgentMessagesTable.createdAt] }
-            .maxOrNull()
-        val requestedCreatedAt = message.createdAt.takeIf { it > 0 } ?: nowMillis()
-        val persistedCreatedAt = currentMaxCreatedAt
-            ?.let { maxOf(requestedCreatedAt, it + 1) }
-            ?: requestedCreatedAt
-
-        val activeBranch = existing[ScopedAgentsTable.activeBranchId]
-
-        ScopedAgentMessagesTable.insert { row ->
-            row[ScopedAgentMessagesTable.userId] = userId.value
-            row[id] = message.id.value
-            row[ScopedAgentMessagesTable.agentId] = agentId.value
-            row[branchId] = activeBranch
-            row[role] = when (message.role) {
-                AgentMessageRole.USER -> ROLE_USER
-                AgentMessageRole.ASSISTANT -> ROLE_ASSISTANT
-            }
-            row[text] = message.text
-            row[status] = message.status
-            row[createdAt] = persistedCreatedAt
-            row[provider] = message.provider
-            row[model] = message.model
-            row[usageInputTokens] = message.usage?.inputTokens
-            row[usageOutputTokens] = message.usage?.outputTokens
-            row[usageTotalTokens] = message.usage?.totalTokens
-            row[latencyMs] = message.latencyMs
-        }
-
-        if (message.role == AgentMessageRole.USER && message.text.isNotBlank()) {
-            val currentTitle = existing[ScopedAgentsTable.title]
-            if (currentTitle.startsWith("Agent ")) {
-                val newTitle = message.text.lineSequence().firstOrNull()?.trim().orEmpty().take(MAX_TITLE_LENGTH)
-                if (newTitle.isNotBlank()) {
-                    ScopedAgentsTable.update({
-                        (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-                    }) { row ->
-                        row[title] = newTitle
-                        row[updatedAt] = nowMillis()
-                    }
-                }
-            }
-        }
-
-        bumpVersionTx(userId)
-        readStateTx(userId)
+    ): Result<AgentState> {
+        return appendMessageOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            message = lazyArg { message },
+        )
     }
 
     override suspend fun updateMessage(
@@ -263,106 +98,65 @@ class PostgresAgentRepository(
         usageOutputTokens: Int?,
         usageTotalTokens: Int?,
         latencyMs: Long?,
-    ): Result<AgentState> = runDb {
-        val updated = ScopedAgentMessagesTable.update({
-            (ScopedAgentMessagesTable.userId eq userId.value) and
-                (ScopedAgentMessagesTable.agentId eq agentId.value) and
-                (ScopedAgentMessagesTable.id eq messageId.value)
-        }) { row ->
-            if (text != null) row[ScopedAgentMessagesTable.text] = text
-            if (status != null) row[ScopedAgentMessagesTable.status] = status
-            if (provider != null) row[ScopedAgentMessagesTable.provider] = provider
-            if (model != null) row[ScopedAgentMessagesTable.model] = model
-            if (usageInputTokens != null) row[ScopedAgentMessagesTable.usageInputTokens] = usageInputTokens
-            if (usageOutputTokens != null) row[ScopedAgentMessagesTable.usageOutputTokens] = usageOutputTokens
-            if (usageTotalTokens != null) row[ScopedAgentMessagesTable.usageTotalTokens] = usageTotalTokens
-            if (latencyMs != null) row[ScopedAgentMessagesTable.latencyMs] = latencyMs
-        }
-        require(updated > 0) { "Message not found: ${messageId.value}" }
-
-        bumpVersionTx(userId)
-        readStateTx(userId)
+    ): Result<AgentState> {
+        return updateMessageOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            messageId = lazyArg { messageId },
+            text = lazyArg { text },
+            status = lazyArg { status },
+            provider = lazyArg { provider },
+            model = lazyArg { model },
+            usageInputTokens = lazyArg { usageInputTokens },
+            usageOutputTokens = lazyArg { usageOutputTokens },
+            usageTotalTokens = lazyArg { usageTotalTokens },
+            latencyMs = lazyArg { latencyMs },
+        )
     }
 
     override suspend fun findMessage(
         userId: UserId,
         agentId: AgentId,
         messageId: AgentMessageId,
-    ): Result<AgentMessage?> = runDb {
-        ScopedAgentMessagesTable.selectAll().where {
-            (ScopedAgentMessagesTable.userId eq userId.value) and
-                (ScopedAgentMessagesTable.agentId eq agentId.value) and
-                (ScopedAgentMessagesTable.id eq messageId.value)
-        }.singleOrNull()?.let(::toMessage)
+    ): Result<AgentMessage?> {
+        return findMessageOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            messageId = lazyArg { messageId },
+        )
     }
 
-    override suspend fun hasProcessingMessage(userId: UserId, agentId: AgentId): Result<Boolean> = runDb {
-        ScopedAgentMessagesTable.selectAll().where {
-            (ScopedAgentMessagesTable.userId eq userId.value) and
-                (ScopedAgentMessagesTable.agentId eq agentId.value) and
-                (ScopedAgentMessagesTable.status eq STATUS_PROCESSING)
-        }.any()
+    override suspend fun hasProcessingMessage(userId: UserId, agentId: AgentId): Result<Boolean> {
+        return hasProcessingMessageOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+        )
     }
 
-    override suspend fun getContextMemory(userId: UserId, agentId: AgentId): Result<AgentContextMemory?> = runDb {
-        ScopedAgentContextMemoryTable.selectAll()
-            .where {
-                (ScopedAgentContextMemoryTable.userId eq userId.value) and
-                    (ScopedAgentContextMemoryTable.agentId eq agentId.value)
-            }
-            .singleOrNull()
-            ?.let(::toContextMemory)
+    override suspend fun getContextMemory(userId: UserId, agentId: AgentId): Result<AgentContextMemory?> {
+        return getContextMemoryOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+        )
     }
 
-    override suspend fun upsertContextMemory(userId: UserId, memory: AgentContextMemory): Result<Unit> = runDb {
-        val now = nowMillis()
-        val existing = ScopedAgentContextMemoryTable.selectAll()
-            .where {
-                (ScopedAgentContextMemoryTable.userId eq userId.value) and
-                    (ScopedAgentContextMemoryTable.agentId eq memory.agentId.value)
-            }
-            .singleOrNull()
-
-        if (existing == null) {
-            ScopedAgentContextMemoryTable.insert { row ->
-                row[ScopedAgentContextMemoryTable.userId] = userId.value
-                row[agentId] = memory.agentId.value
-                row[summaryText] = memory.summaryText
-                row[summarizedUntilCreatedAt] = memory.summarizedUntilCreatedAt
-                row[updatedAt] = memory.updatedAt.takeIf { it > 0 } ?: now
-            }
-        } else {
-            ScopedAgentContextMemoryTable.update({
-                (ScopedAgentContextMemoryTable.userId eq userId.value) and
-                    (ScopedAgentContextMemoryTable.agentId eq memory.agentId.value)
-            }) { row ->
-                row[summaryText] = memory.summaryText
-                row[summarizedUntilCreatedAt] = memory.summarizedUntilCreatedAt
-                row[updatedAt] = memory.updatedAt.takeIf { it > 0 } ?: now
-            }
-        }
-
-        bumpVersionTx(userId, now)
+    override suspend fun upsertContextMemory(userId: UserId, memory: AgentContextMemory): Result<Unit> {
+        return upsertContextMemoryOperation.value.execute(
+            userId = lazyArg { userId },
+            memory = lazyArg { memory },
+        )
     }
 
     override suspend fun listMessagesAfter(
         userId: UserId,
         agentId: AgentId,
         createdAtExclusive: Long,
-    ): Result<List<AgentMessage>> = runDb {
-        ScopedAgentMessagesTable.selectAll()
-            .where {
-                (ScopedAgentMessagesTable.userId eq userId.value) and
-                    (ScopedAgentMessagesTable.agentId eq agentId.value)
-            }
-            .filter { it[ScopedAgentMessagesTable.createdAt] > createdAtExclusive }
-            .sortedWith(
-                compareBy<ResultRow>(
-                    { it[ScopedAgentMessagesTable.createdAt] },
-                    { it[ScopedAgentMessagesTable.id] },
-                )
-            )
-            .map(::toMessage)
+    ): Result<List<AgentMessage>> {
+        return listMessagesAfterOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            createdAtExclusive = lazyArg { createdAtExclusive },
+        )
     }
 
     override suspend fun upsertMessageEmbedding(
@@ -373,39 +167,16 @@ class PostgresAgentRepository(
         textChunk: String,
         embedding: List<Double>,
         createdAt: Long,
-    ): Result<Unit> = runDb {
-        val now = nowMillis()
-        val embeddingPayload = serializeEmbedding(embedding)
-        val existing = ScopedAgentMessageEmbeddingsTable.selectAll().where {
-            (ScopedAgentMessageEmbeddingsTable.userId eq userId.value) and
-                (ScopedAgentMessageEmbeddingsTable.agentId eq agentId.value) and
-                (ScopedAgentMessageEmbeddingsTable.messageId eq messageId.value) and
-                (ScopedAgentMessageEmbeddingsTable.chunkIndex eq chunkIndex)
-        }.singleOrNull()
-
-        if (existing == null) {
-            ScopedAgentMessageEmbeddingsTable.insert { row ->
-                row[ScopedAgentMessageEmbeddingsTable.userId] = userId.value
-                row[ScopedAgentMessageEmbeddingsTable.agentId] = agentId.value
-                row[ScopedAgentMessageEmbeddingsTable.messageId] = messageId.value
-                row[ScopedAgentMessageEmbeddingsTable.chunkIndex] = chunkIndex
-                row[ScopedAgentMessageEmbeddingsTable.textChunk] = textChunk
-                row[ScopedAgentMessageEmbeddingsTable.embedding] = embeddingPayload
-                row[ScopedAgentMessageEmbeddingsTable.createdAt] = createdAt.takeIf { it > 0 } ?: now
-                row[ScopedAgentMessageEmbeddingsTable.updatedAt] = now
-            }
-        } else {
-            ScopedAgentMessageEmbeddingsTable.update({
-                (ScopedAgentMessageEmbeddingsTable.userId eq userId.value) and
-                    (ScopedAgentMessageEmbeddingsTable.agentId eq agentId.value) and
-                    (ScopedAgentMessageEmbeddingsTable.messageId eq messageId.value) and
-                    (ScopedAgentMessageEmbeddingsTable.chunkIndex eq chunkIndex)
-            }) { row ->
-                row[ScopedAgentMessageEmbeddingsTable.textChunk] = textChunk
-                row[ScopedAgentMessageEmbeddingsTable.embedding] = embeddingPayload
-                row[ScopedAgentMessageEmbeddingsTable.updatedAt] = now
-            }
-        }
+    ): Result<Unit> {
+        return upsertMessageEmbeddingOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            messageId = lazyArg { messageId },
+            chunkIndex = lazyArg { chunkIndex },
+            textChunk = lazyArg { textChunk },
+            embedding = lazyArg { embedding },
+            createdAt = lazyArg { createdAt },
+        )
     }
 
     override suspend fun searchRelevantContext(
@@ -414,627 +185,73 @@ class PostgresAgentRepository(
         queryEmbedding: List<Double>,
         limit: Int,
         minScore: Double,
-    ): Result<List<RetrievedContextChunk>> = runDb {
-        if (queryEmbedding.isEmpty()) return@runDb emptyList()
-
-        val ranked = ScopedAgentMessageEmbeddingsTable.selectAll()
-            .where {
-                (ScopedAgentMessageEmbeddingsTable.userId eq userId.value) and
-                    (ScopedAgentMessageEmbeddingsTable.agentId eq agentId.value)
-            }
-            .mapNotNull { row ->
-                val candidateEmbedding = parseEmbedding(row[ScopedAgentMessageEmbeddingsTable.embedding])
-                if (candidateEmbedding.isEmpty()) return@mapNotNull null
-                val score = cosineSimilarity(queryEmbedding, candidateEmbedding)
-                if (score < minScore) return@mapNotNull null
-                SearchCandidate(
-                    messageId = AgentMessageId(row[ScopedAgentMessageEmbeddingsTable.messageId]),
-                    text = row[ScopedAgentMessageEmbeddingsTable.textChunk],
-                    score = score,
-                    createdAt = row[ScopedAgentMessageEmbeddingsTable.createdAt],
-                )
-            }
-            .sortedWith(compareByDescending<SearchCandidate> { it.score }.thenByDescending { it.createdAt })
-            .take(limit)
-
-        ranked.map {
-            RetrievedContextChunk(
-                messageId = it.messageId,
-                text = it.text,
-                score = it.score,
-                createdAt = it.createdAt,
-            )
-        }
+    ): Result<List<RetrievedContextChunk>> {
+        return searchRelevantContextOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            queryEmbedding = lazyArg { queryEmbedding },
+            limit = lazyArg { limit },
+            minScore = lazyArg { minScore },
+        )
     }
 
-    override suspend fun getAgentFacts(userId: UserId, agentId: AgentId): Result<AgentFacts?> = runDb {
-        ScopedAgentFactsTable.selectAll()
-            .where {
-                (ScopedAgentFactsTable.userId eq userId.value) and
-                    (ScopedAgentFactsTable.agentId eq agentId.value)
-            }
-            .singleOrNull()
-            ?.let {
-                AgentFacts(
-                    agentId = agentId,
-                    factsJson = it[ScopedAgentFactsTable.factsJson],
-                    updatedAt = it[ScopedAgentFactsTable.updatedAt],
-                )
-            }
+    override suspend fun getAgentFacts(userId: UserId, agentId: AgentId): Result<AgentFacts?> {
+        return getAgentFactsOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+        )
     }
 
-    override suspend fun upsertAgentFacts(userId: UserId, facts: AgentFacts): Result<Unit> = runDb {
-        val now = nowMillis()
-        val existing = ScopedAgentFactsTable.selectAll()
-            .where {
-                (ScopedAgentFactsTable.userId eq userId.value) and
-                    (ScopedAgentFactsTable.agentId eq facts.agentId.value)
-            }
-            .singleOrNull()
-
-        if (existing == null) {
-            ScopedAgentFactsTable.insert { row ->
-                row[ScopedAgentFactsTable.userId] = userId.value
-                row[agentId] = facts.agentId.value
-                row[factsJson] = facts.factsJson
-                row[updatedAt] = facts.updatedAt.takeIf { it > 0 } ?: now
-            }
-        } else {
-            ScopedAgentFactsTable.update({
-                (ScopedAgentFactsTable.userId eq userId.value) and
-                    (ScopedAgentFactsTable.agentId eq facts.agentId.value)
-            }) { row ->
-                row[factsJson] = facts.factsJson
-                row[updatedAt] = facts.updatedAt.takeIf { it > 0 } ?: now
-            }
-        }
+    override suspend fun upsertAgentFacts(userId: UserId, facts: AgentFacts): Result<Unit> {
+        return upsertAgentFactsOperation.value.execute(
+            userId = lazyArg { userId },
+            facts = lazyArg { facts },
+        )
     }
 
     override suspend fun createBranch(
         userId: UserId,
         agentId: AgentId,
         branch: AgentBranch,
-    ): Result<AgentState> = runDb {
-        val now = nowMillis()
-        val activeBranch = ScopedAgentsTable.selectAll().where {
-            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-        }.singleOrNull()?.get(ScopedAgentsTable.activeBranchId)
-
-        val sourceMessages = ScopedAgentMessagesTable.selectAll()
-            .where {
-                (ScopedAgentMessagesTable.userId eq userId.value) and
-                    (ScopedAgentMessagesTable.agentId eq agentId.value) and
-                    if (activeBranch != null) {
-                        ScopedAgentMessagesTable.branchId eq activeBranch
-                    } else {
-                        ScopedAgentMessagesTable.branchId.isNull()
-                    }
-            }
-            .orderBy(ScopedAgentMessagesTable.createdAt, SortOrder.ASC)
-            .toList()
-
-        val checkpoint = sourceMessages.indexOfFirst { it[ScopedAgentMessagesTable.id] == branch.checkpointMessageId.value }
-        require(checkpoint >= 0) { "Checkpoint message not found: ${branch.checkpointMessageId.value}" }
-        val messagesToCopy = sourceMessages.subList(0, checkpoint + 1)
-
-        ScopedAgentBranchesTable.insert { row ->
-            row[ScopedAgentBranchesTable.userId] = userId.value
-            row[ScopedAgentBranchesTable.agentId] = agentId.value
-            row[branchId] = branch.id
-            row[name] = branch.name
-            row[checkpointMessageId] = branch.checkpointMessageId.value
-            row[createdAt] = branch.createdAt.takeIf { it > 0 } ?: now
-        }
-
-        var copyIndex = 0
-        for (msg in messagesToCopy) {
-            copyIndex++
-            val newMsgId = "${branch.id}-$copyIndex"
-            ScopedAgentMessagesTable.insert { row ->
-                row[ScopedAgentMessagesTable.userId] = userId.value
-                row[id] = newMsgId
-                row[ScopedAgentMessagesTable.agentId] = agentId.value
-                row[branchId] = branch.id
-                row[role] = msg[ScopedAgentMessagesTable.role]
-                row[text] = msg[ScopedAgentMessagesTable.text]
-                row[status] = msg[ScopedAgentMessagesTable.status]
-                row[ScopedAgentMessagesTable.createdAt] = msg[ScopedAgentMessagesTable.createdAt]
-                row[provider] = msg[ScopedAgentMessagesTable.provider]
-                row[model] = msg[ScopedAgentMessagesTable.model]
-                row[usageInputTokens] = msg[ScopedAgentMessagesTable.usageInputTokens]
-                row[usageOutputTokens] = msg[ScopedAgentMessagesTable.usageOutputTokens]
-                row[usageTotalTokens] = msg[ScopedAgentMessagesTable.usageTotalTokens]
-                row[latencyMs] = msg[ScopedAgentMessagesTable.latencyMs]
-            }
-        }
-
-        ScopedAgentsTable.update({
-            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-        }) { row ->
-            row[ScopedAgentsTable.activeBranchId] = branch.id
-            row[updatedAt] = now
-        }
-
-        bumpVersionTx(userId, now)
-        readStateTx(userId)
+    ): Result<AgentState> {
+        return createBranchOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            branch = lazyArg { branch },
+        )
     }
 
     override suspend fun switchBranch(
         userId: UserId,
         agentId: AgentId,
         branchId: String,
-    ): Result<AgentState> = runDb {
-        val now = nowMillis()
-        val targetBranchId = branchId.takeIf { it != MAIN_BRANCH_ID }
-
-        if (targetBranchId != null) {
-            val exists = ScopedAgentBranchesTable.selectAll().where {
-                (ScopedAgentBranchesTable.userId eq userId.value) and
-                    (ScopedAgentBranchesTable.agentId eq agentId.value) and
-                    (ScopedAgentBranchesTable.branchId eq targetBranchId)
-            }.any()
-            require(exists) { "Branch not found: $branchId" }
-        }
-
-        ScopedAgentsTable.update({
-            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-        }) { row ->
-            row[ScopedAgentsTable.activeBranchId] = targetBranchId
-            row[updatedAt] = now
-        }
-
-        bumpVersionTx(userId, now)
-        readStateTx(userId)
+    ): Result<AgentState> {
+        return switchBranchOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            branchId = lazyArg { branchId },
+        )
     }
 
     override suspend fun deleteBranch(
         userId: UserId,
         agentId: AgentId,
         branchId: String,
-    ): Result<AgentState> = runDb {
-        val now = nowMillis()
-
-        ScopedAgentMessagesTable.deleteWhere {
-            (ScopedAgentMessagesTable.userId eq userId.value) and
-                (ScopedAgentMessagesTable.agentId eq agentId.value) and
-                (ScopedAgentMessagesTable.branchId eq branchId)
-        }
-        ScopedAgentBranchesTable.deleteWhere {
-            (ScopedAgentBranchesTable.userId eq userId.value) and
-                (ScopedAgentBranchesTable.agentId eq agentId.value) and
-                (ScopedAgentBranchesTable.branchId eq branchId)
-        }
-
-        val currentActive = ScopedAgentsTable.selectAll().where {
-            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-        }.singleOrNull()?.get(ScopedAgentsTable.activeBranchId)
-
-        if (currentActive == branchId) {
-            ScopedAgentsTable.update({
-                (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
-            }) { row ->
-                row[ScopedAgentsTable.activeBranchId] = null
-                row[updatedAt] = now
-            }
-        }
-
-        bumpVersionTx(userId, now)
-        readStateTx(userId)
-    }
-
-    override suspend fun getBranches(userId: UserId, agentId: AgentId): Result<List<AgentBranch>> = runDb {
-        ScopedAgentBranchesTable.selectAll()
-            .where {
-                (ScopedAgentBranchesTable.userId eq userId.value) and
-                    (ScopedAgentBranchesTable.agentId eq agentId.value)
-            }
-            .orderBy(ScopedAgentBranchesTable.createdAt, SortOrder.ASC)
-            .map { row ->
-                AgentBranch(
-                    id = row[ScopedAgentBranchesTable.branchId],
-                    name = row[ScopedAgentBranchesTable.name],
-                    checkpointMessageId = AgentMessageId(row[ScopedAgentBranchesTable.checkpointMessageId]),
-                    createdAt = row[ScopedAgentBranchesTable.createdAt],
-                )
-            }
-    }
-
-    private suspend fun <T> runDb(block: () -> T): Result<T> = runCatching {
-        withContext(Dispatchers.IO) {
-            ensureInitialized()
-            transaction {
-                block()
-            }
-        }
-    }.onFailure { throwable ->
-        log.e(throwable) { "Repository operation failed" }
-    }
-
-    private fun ensureInitialized() {
-        if (initialized) return
-        synchronized(initLock) {
-            if (initialized) return
-            Database.connect(
-                url = config.jdbcUrl,
-                driver = "org.postgresql.Driver",
-                user = config.dbUser,
-                password = config.dbPassword,
-            )
-
-            transaction {
-                SchemaUtils.createMissingTablesAndColumns(
-                    ScopedAgentStateTable,
-                    ScopedAgentsTable,
-                    ScopedAgentMessagesTable,
-                    ScopedAgentContextMemoryTable,
-                    ScopedAgentMessageEmbeddingsTable,
-                    ScopedAgentFactsTable,
-                    ScopedAgentBranchesTable,
-                )
-            }
-            initialized = true
-            log.i { "PostgreSQL scoped agent repository initialized at ${config.jdbcUrl}" }
-        }
-    }
-
-    private fun readStateTx(userId: UserId): AgentState {
-        val meta = loadMetaTx(userId)
-        val contextMemoryByAgent = ScopedAgentContextMemoryTable.selectAll()
-            .where { ScopedAgentContextMemoryTable.userId eq userId.value }
-            .associateBy { it[ScopedAgentContextMemoryTable.agentId] }
-
-        val allMessageRows = ScopedAgentMessagesTable.selectAll()
-            .where { ScopedAgentMessagesTable.userId eq userId.value }
-            .orderBy(ScopedAgentMessagesTable.createdAt, SortOrder.ASC)
-            .orderBy(ScopedAgentMessagesTable.id, SortOrder.ASC)
-            .toList()
-            .groupBy { it[ScopedAgentMessagesTable.agentId] }
-
-        val branchesByAgent = ScopedAgentBranchesTable.selectAll()
-            .where { ScopedAgentBranchesTable.userId eq userId.value }
-            .orderBy(ScopedAgentBranchesTable.createdAt, SortOrder.ASC)
-            .toList()
-            .groupBy { it[ScopedAgentBranchesTable.agentId] }
-
-        val agents = ScopedAgentsTable.selectAll()
-            .where { ScopedAgentsTable.userId eq userId.value }
-            .orderBy(ScopedAgentsTable.position, SortOrder.ASC)
-            .map { row ->
-                val agentIdStr = row[ScopedAgentsTable.id]
-                val activeBranch = row[ScopedAgentsTable.activeBranchId]
-                val agentMessages = allMessageRows[agentIdStr].orEmpty()
-                val filteredMessages = if (activeBranch != null) {
-                    agentMessages.filter { it[ScopedAgentMessagesTable.branchId] == activeBranch }
-                } else {
-                    agentMessages.filter { it[ScopedAgentMessagesTable.branchId] == null }
-                }
-                val branches = branchesByAgent[agentIdStr].orEmpty().map { branchRow ->
-                    AgentBranch(
-                        id = branchRow[ScopedAgentBranchesTable.branchId],
-                        name = branchRow[ScopedAgentBranchesTable.name],
-                        checkpointMessageId = AgentMessageId(branchRow[ScopedAgentBranchesTable.checkpointMessageId]),
-                        createdAt = branchRow[ScopedAgentBranchesTable.createdAt],
-                    )
-                }
-                toAgent(
-                    row = row,
-                    messages = filteredMessages.map(::toMessage),
-                    contextMemory = contextMemoryByAgent[agentIdStr],
-                    branches = branches,
-                )
-            }
-
-        val activeIdRaw = meta[ScopedAgentStateTable.activeAgentId]
-        val activeExists = activeIdRaw != null && agents.any { it.id.value == activeIdRaw }
-        val activeId = when {
-            activeExists -> AgentId(activeIdRaw!!)
-            agents.isEmpty() -> null
-            else -> {
-                val fallback = agents.first().id.value
-                ScopedAgentStateTable.update({ ScopedAgentStateTable.userId eq userId.value }) { row ->
-                    row[activeAgentId] = fallback
-                }
-                AgentId(fallback)
-            }
-        }
-
-        return AgentState(
-            agents = agents,
-            activeAgentId = activeId,
-            version = meta[ScopedAgentStateTable.version],
+    ): Result<AgentState> {
+        return deleteBranchOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
+            branchId = lazyArg { branchId },
         )
     }
 
-    private fun loadMetaTx(userId: UserId): ResultRow {
-        val existing = ScopedAgentStateTable.selectAll()
-            .where { ScopedAgentStateTable.userId eq userId.value }
-            .singleOrNull()
-        if (existing != null) return existing
-
-        val now = nowMillis()
-        ScopedAgentStateTable.insert { row ->
-            row[ScopedAgentStateTable.userId] = userId.value
-            row[activeAgentId] = null
-            row[nextAgentCounter] = 1
-            row[version] = 1
-            row[updatedAt] = now
-        }
-
-        return ScopedAgentStateTable.selectAll()
-            .where { ScopedAgentStateTable.userId eq userId.value }
-            .singleOrNull()
-            ?: error("Scoped agent state metadata row is missing")
-    }
-
-    private fun bumpVersionTx(userId: UserId, now: Long = nowMillis()) {
-        val meta = loadMetaTx(userId)
-        ScopedAgentStateTable.update({ ScopedAgentStateTable.userId eq userId.value }) { row ->
-            row[version] = meta[ScopedAgentStateTable.version] + 1
-            row[updatedAt] = now
-        }
-    }
-
-    private fun toAgent(
-        row: ResultRow,
-        messages: List<AgentMessage>,
-        contextMemory: ResultRow?,
-        branches: List<AgentBranch> = emptyList(),
-    ): Agent {
-        val hasUserMessages = messages.any { it.role == AgentMessageRole.USER }
-        return Agent(
-            id = AgentId(row[ScopedAgentsTable.id]),
-            title = row[ScopedAgentsTable.title],
-            model = row[ScopedAgentsTable.model],
-            maxOutputTokens = row[ScopedAgentsTable.maxOutputTokens],
-            temperature = row[ScopedAgentsTable.temperature],
-            stopSequences = row[ScopedAgentsTable.stopSequences],
-            agentMode = row[ScopedAgentsTable.agentMode],
-            status = AgentStatus(row[ScopedAgentsTable.status]),
-            contextConfig = toContextConfig(row, hasUserMessages),
-            contextSummary = contextMemory?.get(ScopedAgentContextMemoryTable.summaryText).orEmpty(),
-            summarizedUntilCreatedAt = contextMemory?.get(ScopedAgentContextMemoryTable.summarizedUntilCreatedAt) ?: 0L,
-            contextSummaryUpdatedAt = contextMemory?.get(ScopedAgentContextMemoryTable.updatedAt) ?: 0L,
-            messages = messages,
-            branches = branches,
-            activeBranchId = row[ScopedAgentsTable.activeBranchId],
+    override suspend fun getBranches(userId: UserId, agentId: AgentId): Result<List<AgentBranch>> {
+        return getBranchesOperation.value.execute(
+            userId = lazyArg { userId },
+            agentId = lazyArg { agentId },
         )
     }
 
-    private fun toMessage(row: ResultRow): AgentMessage {
-        val usage = if (row[ScopedAgentMessagesTable.usageTotalTokens] != null) {
-            AgentUsage(
-                inputTokens = row[ScopedAgentMessagesTable.usageInputTokens] ?: 0,
-                outputTokens = row[ScopedAgentMessagesTable.usageOutputTokens] ?: 0,
-                totalTokens = row[ScopedAgentMessagesTable.usageTotalTokens] ?: 0,
-            )
-        } else {
-            null
-        }
-
-        return AgentMessage(
-            id = AgentMessageId(row[ScopedAgentMessagesTable.id]),
-            role = when (row[ScopedAgentMessagesTable.role]) {
-                ROLE_ASSISTANT -> AgentMessageRole.ASSISTANT
-                else -> AgentMessageRole.USER
-            },
-            text = row[ScopedAgentMessagesTable.text],
-            status = row[ScopedAgentMessagesTable.status],
-            createdAt = row[ScopedAgentMessagesTable.createdAt],
-            provider = row[ScopedAgentMessagesTable.provider],
-            model = row[ScopedAgentMessagesTable.model],
-            usage = usage,
-            latencyMs = row[ScopedAgentMessagesTable.latencyMs],
-        )
-    }
-
-    private fun toContextMemory(row: ResultRow): AgentContextMemory {
-        return AgentContextMemory(
-            agentId = AgentId(row[ScopedAgentContextMemoryTable.agentId]),
-            summaryText = row[ScopedAgentContextMemoryTable.summaryText],
-            summarizedUntilCreatedAt = row[ScopedAgentContextMemoryTable.summarizedUntilCreatedAt],
-            updatedAt = row[ScopedAgentContextMemoryTable.updatedAt],
-        )
-    }
-
-    private fun toContextConfig(row: ResultRow, locked: Boolean): AgentContextConfig {
-        val recentN = row[ScopedAgentsTable.contextRecentMessagesN]
-            .takeIf { it > 0 }
-            ?: config.contextRecentMaxMessages.takeIf { it > 0 }
-            ?: DEFAULT_RECENT_MESSAGES_N
-        return when (row[ScopedAgentsTable.contextStrategy]) {
-            CONTEXT_STRATEGY_FULL_HISTORY -> FullHistoryAgentContextConfig(locked = locked)
-            CONTEXT_STRATEGY_SLIDING_WINDOW -> SlidingWindowAgentContextConfig(
-                windowSize = recentN.takeIf { it > 0 } ?: DEFAULT_SLIDING_WINDOW_SIZE,
-                locked = locked,
-            )
-            CONTEXT_STRATEGY_STICKY_FACTS -> StickyFactsAgentContextConfig(
-                recentMessagesN = recentN,
-                locked = locked,
-            )
-            CONTEXT_STRATEGY_BRANCHING -> BranchingAgentContextConfig(
-                recentMessagesN = recentN,
-                locked = locked,
-            )
-            else -> RollingSummaryAgentContextConfig(
-                recentMessagesN = recentN,
-                summarizeEveryK = row[ScopedAgentsTable.contextSummarizeEveryK]
-                    .takeIf { it > 0 }
-                    ?: config.contextSummarizeEveryMessages.takeIf { it > 0 }
-                    ?: DEFAULT_SUMMARIZE_EVERY_K,
-                locked = locked,
-            )
-        }
-    }
-
-    private fun contextStrategyValue(config: AgentContextConfig): String {
-        return when (config) {
-            is FullHistoryAgentContextConfig -> CONTEXT_STRATEGY_FULL_HISTORY
-            is RollingSummaryAgentContextConfig -> CONTEXT_STRATEGY_ROLLING_SUMMARY
-            is SlidingWindowAgentContextConfig -> CONTEXT_STRATEGY_SLIDING_WINDOW
-            is StickyFactsAgentContextConfig -> CONTEXT_STRATEGY_STICKY_FACTS
-            is BranchingAgentContextConfig -> CONTEXT_STRATEGY_BRANCHING
-        }
-    }
-
-    private fun contextRecentMessagesNValue(config: AgentContextConfig): Int {
-        return when (config) {
-            is FullHistoryAgentContextConfig -> DEFAULT_RECENT_MESSAGES_N
-            is RollingSummaryAgentContextConfig -> config.recentMessagesN
-            is SlidingWindowAgentContextConfig -> config.windowSize
-            is StickyFactsAgentContextConfig -> config.recentMessagesN
-            is BranchingAgentContextConfig -> config.recentMessagesN
-        }
-    }
-
-    private fun contextSummarizeEveryKValue(config: AgentContextConfig): Int {
-        return when (config) {
-            is FullHistoryAgentContextConfig -> DEFAULT_SUMMARIZE_EVERY_K
-            is RollingSummaryAgentContextConfig -> config.summarizeEveryK
-            is SlidingWindowAgentContextConfig -> DEFAULT_SUMMARIZE_EVERY_K
-            is StickyFactsAgentContextConfig -> DEFAULT_SUMMARIZE_EVERY_K
-            is BranchingAgentContextConfig -> DEFAULT_SUMMARIZE_EVERY_K
-        }
-    }
-
-    private fun serializeEmbedding(values: List<Double>): String {
-        return values.joinToString(separator = ",") { it.toString() }
-    }
-
-    private fun parseEmbedding(raw: String): List<Double> {
-        if (raw.isBlank()) return emptyList()
-        return raw.split(',').mapNotNull { it.trim().toDoubleOrNull() }
-    }
-
-    private fun cosineSimilarity(a: List<Double>, b: List<Double>): Double {
-        if (a.size != b.size || a.isEmpty()) return 0.0
-
-        var dot = 0.0
-        var aNorm = 0.0
-        var bNorm = 0.0
-        for (index in a.indices) {
-            val av = a[index]
-            val bv = b[index]
-            dot += av * bv
-            aNorm += av * av
-            bNorm += bv * bv
-        }
-
-        if (aNorm <= 0.0 || bNorm <= 0.0) return 0.0
-        return dot / (sqrt(aNorm) * sqrt(bNorm))
-    }
-
-    private fun nowMillis(): Long = System.currentTimeMillis()
+    private fun <T> lazyArg(valueProvider: () -> T): Lazy<T> =
+        lazy(LazyThreadSafetyMode.NONE) { valueProvider() }
 }
-
-private const val MAIN_BRANCH_ID = "main"
-
-private object ScopedAgentStateTable : Table("scoped_agent_state") {
-    val userId = varchar("user_id", 128)
-    val activeAgentId = varchar("active_agent_id", 64).nullable()
-    val nextAgentCounter = integer("next_agent_counter")
-    val version = long("version")
-    val updatedAt = long("updated_at")
-
-    override val primaryKey = PrimaryKey(userId)
-}
-
-private object ScopedAgentsTable : Table("scoped_agents") {
-    val userId = varchar("user_id", 128)
-    val id = varchar("id", 64)
-    val title = varchar("title", 255)
-    val model = varchar("model", 128)
-    val maxOutputTokens = varchar("max_output_tokens", 32)
-    val temperature = varchar("temperature", 32)
-    val stopSequences = text("stop_sequences")
-    val agentMode = varchar("agent_mode", 32)
-    val contextStrategy = varchar("context_strategy", 64).default(CONTEXT_STRATEGY_ROLLING_SUMMARY)
-    val contextRecentMessagesN = integer("context_recent_messages_n").default(DEFAULT_RECENT_MESSAGES_N)
-    val contextSummarizeEveryK = integer("context_summarize_every_k").default(DEFAULT_SUMMARIZE_EVERY_K)
-    val activeBranchId = varchar("active_branch_id", 64).nullable().default(null)
-    val status = varchar("status", 255)
-    val position = integer("position")
-    val createdAt = long("created_at")
-    val updatedAt = long("updated_at")
-
-    override val primaryKey = PrimaryKey(userId, id)
-}
-
-private object ScopedAgentMessagesTable : Table("scoped_agent_messages") {
-    val userId = varchar("user_id", 128)
-    val id = varchar("id", 64)
-    val agentId = varchar("agent_id", 64)
-    val branchId = varchar("branch_id", 64).nullable().default(null)
-    val role = varchar("role", 32)
-    val text = text("text")
-    val status = varchar("status", 32)
-    val createdAt = long("created_at")
-    val provider = varchar("provider", 64).nullable()
-    val model = varchar("model", 128).nullable()
-    val usageInputTokens = integer("usage_input_tokens").nullable()
-    val usageOutputTokens = integer("usage_output_tokens").nullable()
-    val usageTotalTokens = integer("usage_total_tokens").nullable()
-    val latencyMs = long("latency_ms").nullable()
-
-    override val primaryKey = PrimaryKey(userId, id)
-}
-
-private object ScopedAgentContextMemoryTable : Table("scoped_agent_context_memory") {
-    val userId = varchar("user_id", 128)
-    val agentId = varchar("agent_id", 64)
-    val summaryText = text("summary_text")
-    val summarizedUntilCreatedAt = long("summarized_until_created_at")
-    val updatedAt = long("updated_at")
-
-    override val primaryKey = PrimaryKey(userId, agentId)
-}
-
-private object ScopedAgentMessageEmbeddingsTable : Table("scoped_agent_message_embeddings") {
-    val userId = varchar("user_id", 128)
-    val agentId = varchar("agent_id", 64)
-    val messageId = varchar("message_id", 64)
-    val chunkIndex = integer("chunk_index")
-    val textChunk = text("text_chunk")
-    val embedding = text("embedding")
-    val createdAt = long("created_at")
-    val updatedAt = long("updated_at")
-
-    override val primaryKey = PrimaryKey(userId, agentId, messageId, chunkIndex)
-}
-
-private object ScopedAgentFactsTable : Table("scoped_agent_facts") {
-    val userId = varchar("user_id", 128)
-    val agentId = varchar("agent_id", 64)
-    val factsJson = text("facts_json")
-    val updatedAt = long("updated_at")
-
-    override val primaryKey = PrimaryKey(userId, agentId)
-}
-
-private object ScopedAgentBranchesTable : Table("scoped_agent_branches") {
-    val userId = varchar("user_id", 128)
-    val agentId = varchar("agent_id", 64)
-    val branchId = varchar("branch_id", 64)
-    val name = varchar("name", 255)
-    val checkpointMessageId = varchar("checkpoint_message_id", 64)
-    val createdAt = long("created_at")
-
-    override val primaryKey = PrimaryKey(userId, agentId, branchId)
-}
-
-private data class SearchCandidate(
-    val messageId: AgentMessageId,
-    val text: String,
-    val score: Double,
-    val createdAt: Long,
-)
-
-private const val MAX_TITLE_LENGTH = 20
-private const val STATUS_DONE = "done"
-private const val STATUS_PROCESSING = "processing"
-private const val ROLE_USER = "user"
-private const val ROLE_ASSISTANT = "assistant"
-private const val CONTEXT_STRATEGY_FULL_HISTORY = "full_history"
-private const val CONTEXT_STRATEGY_ROLLING_SUMMARY = "rolling_summary_recent_n"
-private const val CONTEXT_STRATEGY_SLIDING_WINDOW = "sliding_window"
-private const val CONTEXT_STRATEGY_STICKY_FACTS = "sticky_facts"
-private const val CONTEXT_STRATEGY_BRANCHING = "branching"

@@ -1,8 +1,12 @@
 package io.artemkopan.ai.backend.di
 
+import co.touchlab.kermit.LoggerConfig
+import io.artemkopan.ai.backend.agent.ws.AgentWsMessageHandler
+import io.artemkopan.ai.backend.agent.ws.usecase.AgentWsMessageUseCase
 import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.core.domain.repository.LlmRepository
+import io.artemkopan.ai.sharedcontract.AgentWsClientMessageDto
 import io.ktor.client.*
 import io.ktor.client.engine.*
 import kotlinx.serialization.json.Json
@@ -10,7 +14,9 @@ import org.koin.core.annotation.KoinExperimentalAPI
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 import org.koin.test.verify.verify
+import kotlin.reflect.KClass
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 @OptIn(KoinExperimentalAPI::class)
 class KoinModulesVerifyTest {
@@ -45,6 +51,8 @@ class KoinModulesVerifyTest {
                 AppConfig::class,
                 HttpClient::class,
                 Json::class,
+                Lazy::class,
+                LoggerConfig::class,
             )
         )
     }
@@ -71,6 +79,8 @@ class KoinModulesVerifyTest {
                 HttpClientEngine::class,
                 HttpClientConfig::class,
                 Boolean::class,
+                Lazy::class,
+                LoggerConfig::class,
             )
         )
     }
@@ -85,5 +95,26 @@ class KoinModulesVerifyTest {
         koinApp.koin.getAll<Any>()
 
         koinApp.close()
+    }
+
+    @Test
+    fun `ws handler bindings cover all client dto types`() {
+        val koinApp = koinApplication {
+            modules(appModules(testConfig))
+        }
+
+        try {
+            val expectedTypes = AgentWsClientMessageDto::class.sealedSubclasses.toSet()
+            val handlers = koinApp.koin.getAll<AgentWsMessageUseCase<*>>()
+            assertEquals(expectedTypes.size, handlers.size)
+
+            val dispatchMap: Map<KClass<out AgentWsClientMessageDto>, AgentWsMessageUseCase<out AgentWsClientMessageDto>> =
+                koinApp.koin.get()
+            assertEquals(expectedTypes, dispatchMap.keys.toSet())
+
+            koinApp.koin.get<AgentWsMessageHandler>()
+        } finally {
+            koinApp.close()
+        }
     }
 }

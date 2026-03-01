@@ -2,14 +2,14 @@ package io.artemkopan.ai.webapp
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.CanvasBasedWindow
-import io.artemkopan.ai.sharedui.di.sharedUiModules
-import io.artemkopan.ai.sharedui.state.AppViewModel
-import io.artemkopan.ai.sharedui.ui.screen.AiAssistantScreen
-import io.artemkopan.ai.webapp.ui.WsAgentGateway
 import co.touchlab.kermit.Logger
+import io.artemkopan.ai.sharedui.di.sharedUiFeatureModules
+import io.artemkopan.ai.sharedui.factory.SharedUiViewModelFactory
+import io.artemkopan.ai.sharedui.feature.root.view.AiAssistantScreen
+import io.artemkopan.ai.webapp.ui.WsAgentGateway
 import kotlinx.browser.window
 import org.koin.compose.KoinApplication
-import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.koinInject
 
 private fun resolveBackendUrl(): String {
     // In production, use same origin. For local dev, override via query param: ?backend=http://localhost:8080
@@ -32,10 +32,10 @@ fun main() {
 
     CanvasBasedWindow(title = "AiAssistant") {
         KoinApplication(application = {
-            modules(sharedUiModules(gateway))
+            modules(sharedUiFeatureModules(gateway))
         }) {
-            val viewModel = koinViewModel<AppViewModel>()
-            AiAssistantScreen(viewModel)
+            val factory = koinInject<SharedUiViewModelFactory>()
+            AiAssistantScreen(factory)
         }
     }
 }
