@@ -4,52 +4,44 @@ import io.artemkopan.ai.core.domain.model.*
 
 class BuildAgentStatsSnippetUseCase {
     fun execute(stats: AgentStats): String {
-        val strategy = when (val config = stats.contextConfig) {
-            is FullHistoryAgentContextConfig -> "full_history"
-            is RollingSummaryAgentContextConfig -> {
-                "rolling_summary_recent_n(recentN=${config.recentMessagesN}, summarizeEveryK=${config.summarizeEveryK})"
-            }
-            is SlidingWindowAgentContextConfig -> "sliding_window(windowSize=${config.windowSize})"
-            is StickyFactsAgentContextConfig -> "sticky_facts(recentN=${config.recentMessagesN})"
-            is BranchingAgentContextConfig -> "branching(recentN=${config.recentMessagesN})"
-        }
-        val latest = stats.latestAssistant
-        val recentTurns = stats.recentTurns.joinToString(separator = "\n") { turn ->
-            "- ${turn.role.name}: ${truncate(turn.text, MAX_TURN_TEXT)}"
-        }
+        val strategy = strategyDetails(stats.contextConfig)
 
         return buildString {
-            appendLine("AGENT STATS")
-            appendLine("id: ${stats.agentId}")
-            appendLine("title: ${stats.title}")
-            appendLine("model: ${stats.model}")
-            appendLine("mode: ${stats.agentMode}")
-            appendLine("context_strategy: $strategy")
-            appendLine("context_summary: ${truncate(stats.contextSummary, MAX_SUMMARY_TEXT)}")
+            appendLine("agent name: ${stats.title}")
+            appendLine("strategy: ${strategy.name}")
+            appendLine("strategy parameters: ${strategy.parameters}")
             appendLine(
-                "tokens: latest(in=${stats.tokenStats.latestInputTokens}, out=${stats.tokenStats.latestOutputTokens}, total=${stats.tokenStats.latestTotalTokens}), " +
-                    "cumulative(in=${stats.tokenStats.cumulativeInputTokens}, out=${stats.tokenStats.cumulativeOutputTokens}, total=${stats.tokenStats.cumulativeTotalTokens}), " +
-                    "context(raw=${stats.tokenStats.estimatedContextRawTokens}, compressed=${stats.tokenStats.estimatedContextCompressedTokens})"
+                "tokens used: total=${stats.tokenStats.cumulativeTotalTokens}, " +
+                    "input=${stats.tokenStats.cumulativeInputTokens}, output=${stats.tokenStats.cumulativeOutputTokens}"
             )
-            appendLine("system_instruction: ${truncate(stats.systemInstruction, MAX_SYSTEM_PROMPT_TEXT)}")
-            if (latest != null) {
-                appendLine("latest_response: ${truncate(latest.text, MAX_RESPONSE_TEXT)}")
-            }
-            if (recentTurns.isNotBlank()) {
-                appendLine("recent_turns:")
-                appendLine(recentTurns)
-            }
         }.trimEnd()
-    }
-
-    private fun truncate(value: String, maxLength: Int): String {
-        val normalized = value.replace('\n', ' ').trim()
-        if (normalized.length <= maxLength) return normalized
-        return normalized.take(maxLength) + "..."
     }
 }
 
-private const val MAX_SUMMARY_TEXT = 700
-private const val MAX_SYSTEM_PROMPT_TEXT = 500
-private const val MAX_RESPONSE_TEXT = 500
-private const val MAX_TURN_TEXT = 180
+private data class StrategyDetails(
+    val name: String,
+    val parameters: String,
+)
+
+private fun strategyDetails(config: AgentContextConfig): StrategyDetails = when (config) {
+    is FullHistoryAgentContextConfig -> StrategyDetails(
+        name = "full_history",
+        parameters = "none",
+    )
+    is RollingSummaryAgentContextConfig -> StrategyDetails(
+        name = "rolling_summary",
+        parameters = "recentMessagesN=${config.recentMessagesN}, summarizeEveryK=${config.summarizeEveryK}",
+    )
+    is SlidingWindowAgentContextConfig -> StrategyDetails(
+        name = "sliding_window",
+        parameters = "windowSize=${config.windowSize}",
+    )
+    is StickyFactsAgentContextConfig -> StrategyDetails(
+        name = "sticky_facts",
+        parameters = "recentMessagesN=${config.recentMessagesN}",
+    )
+    is BranchingAgentContextConfig -> StrategyDetails(
+        name = "branching",
+        parameters = "recentMessagesN=${config.recentMessagesN}",
+    )
+}

@@ -9,6 +9,8 @@ import io.artemkopan.ai.backend.provider.LlmModelCatalog
 import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.usecase.*
+import io.artemkopan.ai.core.application.usecase.shortcut.ParseStatsShortcutTokensUseCase
+import io.artemkopan.ai.core.application.usecase.shortcut.ResolveStatsShortcutsUseCase
 import io.artemkopan.ai.core.application.usecase.stats.GetAgentStatsUseCase
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.core.domain.repository.LlmRepository
@@ -71,6 +73,8 @@ fun Application.module(
     val completeAgentMessageUseCase by inject<CompleteAgentMessageUseCase>()
     val failAgentMessageUseCase by inject<FailAgentMessageUseCase>()
     val stopAgentMessageUseCase by inject<StopAgentMessageUseCase>()
+    val parseStatsShortcutTokensUseCase by inject<ParseStatsShortcutTokensUseCase>()
+    val resolveStatsShortcutsUseCase by inject<ResolveStatsShortcutsUseCase>()
     val getAgentStatsUseCase by inject<GetAgentStatsUseCase>()
     val agentRepository by inject<AgentRepository>()
     val modelCatalog by inject<LlmModelCatalog>()
@@ -134,6 +138,8 @@ fun Application.module(
         failAgentMessageUseCase = failAgentMessageUseCase,
         stopAgentMessageUseCase = stopAgentMessageUseCase,
         generateTextUseCase = generateTextUseCase,
+        parseStatsShortcutTokensUseCase = parseStatsShortcutTokensUseCase,
+        resolveStatsShortcutsUseCase = resolveStatsShortcutsUseCase,
         mapFailureToUserMessageUseCase = mapFailureToUserMessageUseCase,
         agentRepository = agentRepository,
         sessionRegistry = wsSessionRegistry,

@@ -2,6 +2,8 @@ package io.artemkopan.ai.backend.agent.ws
 
 import io.artemkopan.ai.core.application.model.*
 import io.artemkopan.ai.core.application.usecase.*
+import io.artemkopan.ai.core.application.usecase.shortcut.ParseStatsShortcutTokensUseCase
+import io.artemkopan.ai.core.application.usecase.shortcut.ResolveStatsShortcutsUseCase
 import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.sharedcontract.*
@@ -12,6 +14,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import org.slf4j.Logger
+import kotlin.random.Random
 
 class AgentWsMessageHandler(
     private val getAgentStateUseCase: GetAgentStateUseCase,
@@ -24,6 +27,8 @@ class AgentWsMessageHandler(
     private val failAgentMessageUseCase: FailAgentMessageUseCase,
     private val stopAgentMessageUseCase: StopAgentMessageUseCase,
     private val generateTextUseCase: GenerateTextUseCase,
+    private val parseStatsShortcutTokensUseCase: ParseStatsShortcutTokensUseCase,
+    private val resolveStatsShortcutsUseCase: ResolveStatsShortcutsUseCase,
     private val mapFailureToUserMessageUseCase: MapFailureToUserMessageUseCase,
     private val agentRepository: AgentRepository,
     private val sessionRegistry: AgentWsSessionRegistry,
@@ -101,6 +106,10 @@ class AgentWsMessageHandler(
             is SendAgentMessageCommandDto -> {
                 if (isAgentBusy(userScope, parsed.agentId)) {
                     sendError(session, "This agent already has a processing message.", parsed.requestId)
+                    return
+                }
+
+                if (tryHandleStatsShortcutCommand(userScope, parsed, session)) {
                     return
                 }
 
@@ -384,6 +393,57 @@ class AgentWsMessageHandler(
             .onSuccess { state -> broadcastSnapshot(userScope, state) }
             .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
     }
+
+    private suspend fun tryHandleStatsShortcutCommand(
+        userScope: String,
+        parsed: SendAgentMessageCommandDto,
+        session: DefaultWebSocketServerSession,
+    ): Boolean {
+        val normalizedText = parsed.text.trim()
+        val token = parseStatsShortcutTokensUseCase.execute(normalizedText).singleOrNull() ?: return false
+        if (token.raw != normalizedText) return false
+
+        val resolved = resolveStatsShortcutsUseCase.execute(UserId(userScope), listOf(token)).getOrElse { throwable ->
+            sendOperationFailure(session, throwable, parsed.requestId)
+            return true
+        }
+        val responseText = resolved[token.raw]
+            ?.takeIf { it.isNotBlank() }
+            ?: NO_AGENT_STATS_MESSAGE
+
+        val userId = UserId(userScope)
+        val agentId = AgentId(parsed.agentId)
+        val userMessage = AgentMessage(
+            id = AgentMessageId("cmd-${createMessageId()}"),
+            role = AgentMessageRole.USER,
+            text = normalizedText,
+            status = STATUS_DONE,
+            createdAt = 0L,
+        )
+        val assistantMessage = AgentMessage(
+            id = AgentMessageId("cmd-${createMessageId()}"),
+            role = AgentMessageRole.ASSISTANT,
+            text = responseText,
+            status = STATUS_DONE,
+            createdAt = 0L,
+        )
+
+        agentRepository.appendMessage(userId, agentId, userMessage).getOrElse { throwable ->
+            sendOperationFailure(session, throwable, parsed.requestId)
+            return true
+        }
+        agentRepository.appendMessage(userId, agentId, assistantMessage)
+            .onSuccess { state -> broadcastSnapshot(userScope, state) }
+            .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
+
+        return true
+    }
+
+    private fun createMessageId(): String {
+        val a = Random.nextLong().toULong().toString(16)
+        val b = Random.nextLong().toULong().toString(16)
+        return "$a$b"
+    }
 }
 
 private data class ProcessingJob(
@@ -391,3 +451,6 @@ private data class ProcessingJob(
     val job: Job,
     var stopRequested: Boolean,
 )
+
+private const val STATUS_DONE = "done"
+private const val NO_AGENT_STATS_MESSAGE = "No agent stats available."

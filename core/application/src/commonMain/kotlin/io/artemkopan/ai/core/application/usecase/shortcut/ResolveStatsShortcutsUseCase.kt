@@ -27,8 +27,12 @@ class ResolveStatsShortcutsUseCase(
         val resolved = mutableMapOf<String, String>()
         for (token in tokens) {
             if (token.allAgents) {
-                val combined = stats.joinToString(separator = "\n---\n") { agentStats ->
-                    buildAgentStatsSnippetUseCase.execute(agentStats)
+                val combined = if (stats.isEmpty()) {
+                    NO_AGENT_STATS_MESSAGE
+                } else {
+                    stats.joinToString(separator = "\n---\n") { agentStats ->
+                        buildAgentStatsSnippetUseCase.execute(agentStats)
+                    }
                 }
                 resolved[token.raw] = combined
             } else {
@@ -40,3 +44,5 @@ class ResolveStatsShortcutsUseCase(
         return Result.success(resolved)
     }
 }
+
+private const val NO_AGENT_STATS_MESSAGE = "No agent stats available."
