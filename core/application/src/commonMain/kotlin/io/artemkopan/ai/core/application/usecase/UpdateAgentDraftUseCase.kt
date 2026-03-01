@@ -62,6 +62,24 @@ class UpdateAgentDraftUseCase(
                     )
                 )
             }
+            is SlidingWindowAgentContextConfig -> {
+                if (config.windowSize <= 0) {
+                    return Result.failure(AppError.Validation("Window size must be greater than 0."))
+                }
+                Result.success(config)
+            }
+            is StickyFactsAgentContextConfig -> {
+                if (config.recentMessagesN <= 0) {
+                    return Result.failure(AppError.Validation("Recent messages N must be greater than 0."))
+                }
+                Result.success(config)
+            }
+            is BranchingAgentContextConfig -> {
+                if (config.recentMessagesN <= 0) {
+                    return Result.failure(AppError.Validation("Recent messages N must be greater than 0."))
+                }
+                Result.success(config)
+            }
         }
     }
 }
@@ -70,5 +88,8 @@ private fun AgentContextConfig.withLocked(locked: Boolean): AgentContextConfig {
     return when (this) {
         is FullHistoryAgentContextConfig -> copy(locked = locked)
         is RollingSummaryAgentContextConfig -> copy(locked = locked)
+        is SlidingWindowAgentContextConfig -> copy(locked = locked)
+        is StickyFactsAgentContextConfig -> copy(locked = locked)
+        is BranchingAgentContextConfig -> copy(locked = locked)
     }
 }

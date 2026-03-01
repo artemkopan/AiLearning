@@ -12,9 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
+import io.artemkopan.ai.sharedcontract.BranchingContextConfigDto
 import io.artemkopan.ai.sharedui.state.*
 import io.artemkopan.ai.sharedui.ui.component.*
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
@@ -173,6 +176,25 @@ private fun CenterConversationColumn(
         agent.messages + queuedMessages.map { it.asDisplayMessage() }
     }
     val queuedIds = remember(queuedMessages) { queuedMessages.map { it.id }.toSet() }
+    var messageInputValue by remember(agent.id.value) {
+        mutableStateOf(
+            TextFieldValue(
+                text = agent.draftMessage,
+                selection = TextRange(agent.draftMessage.length),
+            )
+        )
+    }
+    LaunchedEffect(agent.id.value, agent.draftMessage) {
+        if (messageInputValue.text != agent.draftMessage) {
+            messageInputValue = TextFieldValue(
+                text = agent.draftMessage,
+                selection = TextRange(agent.draftMessage.length),
+            )
+        }
+    }
+    val slashTokenBounds = remember(messageInputValue) {
+        findSlashTokenBounds(messageInputValue)
+    }
 
     Column(
         modifier = modifier,
@@ -205,12 +227,17 @@ private fun CenterConversationColumn(
                             color = CyberpunkColors.TextMuted,
                         )
                     } else {
+                        val isBranching = agent.contextConfig is BranchingContextConfigDto
                         displayMessages.forEach { message ->
                             MessageRow(
                                 message = message,
                                 isQueuedLocal = queuedIds.contains(message.id),
+                                isBranchingActive = isBranching,
                                 onStop = {
                                     onAction(UiAction.StopQueue)
+                                },
+                                onBranch = { messageId ->
+                                    onAction(UiAction.CreateBranch(messageId, "branch-${message.id.takeLast(6)}"))
                                 },
                             )
                         }
@@ -231,17 +258,24 @@ private fun CenterConversationColumn(
         }
 
         CyberpunkTextField(
-            value = agent.draftMessage,
-            onValueChange = { onAction(UiAction.MessageInputChanged(it)) },
+            value = messageInputValue,
+            onValueChange = { value ->
+                messageInputValue = value
+                onAction(UiAction.MessageInputChanged(value.text))
+            },
             label = "// MESSAGE",
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
             maxLines = 8,
         )
         SlashCommandPopup(
-            visible = agent.draftMessage.trimEnd().endsWith("/"),
+            visible = slashTokenBounds != null,
             agents = allAgents,
-            onInsertToken = { token -> onAction(UiAction.InsertSlashToken(token)) },
+            onInsertToken = { token ->
+                val updated = insertSlashTokenAtCaret(messageInputValue, token, slashTokenBounds)
+                messageInputValue = updated
+                onAction(UiAction.MessageInputChanged(updated.text))
+            },
             onDismiss = {},
             modifier = Modifier.fillMaxWidth(),
         )
@@ -279,7 +313,9 @@ private fun CenterConversationColumn(
 private fun MessageRow(
     message: AgentMessageState,
     isQueuedLocal: Boolean,
+    isBranchingActive: Boolean,
     onStop: () -> Unit,
+    onBranch: (messageId: String) -> Unit,
 ) {
     val roleColor = when (message.role) {
         AgentMessageRoleDto.USER -> if (isQueuedLocal) CyberpunkColors.Cyan else CyberpunkColors.Yellow
@@ -298,16 +334,27 @@ private fun MessageRow(
                 color = roleColor,
             )
 
-            if (!isQueuedLocal &&
-                message.role == AgentMessageRoleDto.ASSISTANT &&
-                message.status.equals("processing", ignoreCase = true)
-            ) {
-                Text(
-                    text = "STOP",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CyberpunkColors.Red,
-                    modifier = Modifier.clickable(onClick = onStop),
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (isBranchingActive && !isQueuedLocal) {
+                    Text(
+                        text = "BRANCH",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = CyberpunkColors.Yellow,
+                        modifier = Modifier.clickable { onBranch(message.id) },
+                    )
+                }
+
+                if (!isQueuedLocal &&
+                    message.role == AgentMessageRoleDto.ASSISTANT &&
+                    message.status.equals("processing", ignoreCase = true)
+                ) {
+                    Text(
+                        text = "STOP",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = CyberpunkColors.Red,
+                        modifier = Modifier.clickable(onClick = onStop),
+                    )
+                }
             }
         }
 
@@ -387,6 +434,11 @@ private fun SettingsColumn(
                 onStrategyChanged = { onAction(UiAction.ContextStrategyChanged(it)) },
                 onRecentMessagesChanged = { onAction(UiAction.ContextRecentMessagesChanged(it)) },
                 onSummarizeEveryChanged = { onAction(UiAction.ContextSummarizeEveryChanged(it)) },
+                onWindowSizeChanged = { onAction(UiAction.ContextWindowSizeChanged(it)) },
+                branches = agent.branches,
+                activeBranchId = agent.activeBranchId,
+                onSwitchBranch = { onAction(UiAction.SwitchBranch(it)) },
+                onDeleteBranch = { onAction(UiAction.DeleteBranch(it)) },
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -447,6 +499,62 @@ private fun RuntimeInfoPanel(
             style = MaterialTheme.typography.bodySmall,
             color = CyberpunkColors.TextMuted,
         )
+    }
+}
+
+private data class SlashTokenBounds(
+    val start: Int,
+    val endExclusive: Int,
+)
+
+private fun findSlashTokenBounds(value: TextFieldValue): SlashTokenBounds? {
+    if (!value.selection.collapsed) return null
+    val selectionStart = value.selection.start
+    val text = value.text
+    if (selectionStart < 0 || selectionStart > text.length) return null
+
+    var tokenStart = selectionStart
+    while (tokenStart > 0 && !text[tokenStart - 1].isWhitespace()) {
+        tokenStart -= 1
+    }
+
+    var tokenEnd = selectionStart
+    while (tokenEnd < text.length && !text[tokenEnd].isWhitespace()) {
+        tokenEnd += 1
+    }
+
+    if (tokenStart >= text.length) return null
+    if (text[tokenStart] != '/') return null
+    return SlashTokenBounds(start = tokenStart, endExclusive = tokenEnd)
+}
+
+private fun insertSlashTokenAtCaret(
+    value: TextFieldValue,
+    token: String,
+    slashTokenBounds: SlashTokenBounds?,
+): TextFieldValue {
+    val text = value.text
+    return if (slashTokenBounds != null) {
+        val trailingSpace = when {
+            slashTokenBounds.endExclusive >= text.length -> " "
+            text[slashTokenBounds.endExclusive].isWhitespace() -> ""
+            else -> " "
+        }
+        val replacement = token + trailingSpace
+        val updated = text.replaceRange(slashTokenBounds.start, slashTokenBounds.endExclusive, replacement)
+        val cursor = slashTokenBounds.start + replacement.length
+        TextFieldValue(text = updated, selection = TextRange(cursor))
+    } else {
+        val selectionStart = value.selection.start.coerceIn(0, text.length)
+        val selectionEnd = value.selection.end.coerceIn(0, text.length)
+        val start = minOf(selectionStart, selectionEnd)
+        val end = maxOf(selectionStart, selectionEnd)
+        val leadingSpace = if (start > 0 && !text[start - 1].isWhitespace()) " " else ""
+        val trailingSpace = if (end < text.length && !text[end].isWhitespace()) " " else ""
+        val replacement = "$leadingSpace$token$trailingSpace"
+        val updated = text.replaceRange(start, end, replacement)
+        val cursor = start + replacement.length
+        TextFieldValue(text = updated, selection = TextRange(cursor))
     }
 }
 

@@ -133,6 +133,14 @@ class PostgresAgentRepository(
             (ScopedAgentMessageEmbeddingsTable.userId eq userId.value) and
                 (ScopedAgentMessageEmbeddingsTable.agentId eq agentId.value)
         }
+        ScopedAgentFactsTable.deleteWhere {
+            (ScopedAgentFactsTable.userId eq userId.value) and
+                (ScopedAgentFactsTable.agentId eq agentId.value)
+        }
+        ScopedAgentBranchesTable.deleteWhere {
+            (ScopedAgentBranchesTable.userId eq userId.value) and
+                (ScopedAgentBranchesTable.agentId eq agentId.value)
+        }
         ScopedAgentsTable.deleteWhere {
             (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
         }
@@ -202,10 +210,13 @@ class PostgresAgentRepository(
             ?.let { maxOf(requestedCreatedAt, it + 1) }
             ?: requestedCreatedAt
 
+        val activeBranch = existing[ScopedAgentsTable.activeBranchId]
+
         ScopedAgentMessagesTable.insert { row ->
             row[ScopedAgentMessagesTable.userId] = userId.value
             row[id] = message.id.value
             row[ScopedAgentMessagesTable.agentId] = agentId.value
+            row[branchId] = activeBranch
             row[role] = when (message.role) {
                 AgentMessageRole.USER -> ROLE_USER
                 AgentMessageRole.ASSISTANT -> ROLE_ASSISTANT
@@ -436,6 +447,198 @@ class PostgresAgentRepository(
         }
     }
 
+    override suspend fun getAgentFacts(userId: UserId, agentId: AgentId): Result<AgentFacts?> = runDb {
+        ScopedAgentFactsTable.selectAll()
+            .where {
+                (ScopedAgentFactsTable.userId eq userId.value) and
+                    (ScopedAgentFactsTable.agentId eq agentId.value)
+            }
+            .singleOrNull()
+            ?.let {
+                AgentFacts(
+                    agentId = agentId,
+                    factsJson = it[ScopedAgentFactsTable.factsJson],
+                    updatedAt = it[ScopedAgentFactsTable.updatedAt],
+                )
+            }
+    }
+
+    override suspend fun upsertAgentFacts(userId: UserId, facts: AgentFacts): Result<Unit> = runDb {
+        val now = nowMillis()
+        val existing = ScopedAgentFactsTable.selectAll()
+            .where {
+                (ScopedAgentFactsTable.userId eq userId.value) and
+                    (ScopedAgentFactsTable.agentId eq facts.agentId.value)
+            }
+            .singleOrNull()
+
+        if (existing == null) {
+            ScopedAgentFactsTable.insert { row ->
+                row[ScopedAgentFactsTable.userId] = userId.value
+                row[agentId] = facts.agentId.value
+                row[factsJson] = facts.factsJson
+                row[updatedAt] = facts.updatedAt.takeIf { it > 0 } ?: now
+            }
+        } else {
+            ScopedAgentFactsTable.update({
+                (ScopedAgentFactsTable.userId eq userId.value) and
+                    (ScopedAgentFactsTable.agentId eq facts.agentId.value)
+            }) { row ->
+                row[factsJson] = facts.factsJson
+                row[updatedAt] = facts.updatedAt.takeIf { it > 0 } ?: now
+            }
+        }
+    }
+
+    override suspend fun createBranch(
+        userId: UserId,
+        agentId: AgentId,
+        branch: AgentBranch,
+    ): Result<AgentState> = runDb {
+        val now = nowMillis()
+        val activeBranch = ScopedAgentsTable.selectAll().where {
+            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
+        }.singleOrNull()?.get(ScopedAgentsTable.activeBranchId)
+
+        val sourceMessages = ScopedAgentMessagesTable.selectAll()
+            .where {
+                (ScopedAgentMessagesTable.userId eq userId.value) and
+                    (ScopedAgentMessagesTable.agentId eq agentId.value) and
+                    if (activeBranch != null) {
+                        ScopedAgentMessagesTable.branchId eq activeBranch
+                    } else {
+                        ScopedAgentMessagesTable.branchId.isNull()
+                    }
+            }
+            .orderBy(ScopedAgentMessagesTable.createdAt, SortOrder.ASC)
+            .toList()
+
+        val checkpoint = sourceMessages.indexOfFirst { it[ScopedAgentMessagesTable.id] == branch.checkpointMessageId.value }
+        require(checkpoint >= 0) { "Checkpoint message not found: ${branch.checkpointMessageId.value}" }
+        val messagesToCopy = sourceMessages.subList(0, checkpoint + 1)
+
+        ScopedAgentBranchesTable.insert { row ->
+            row[ScopedAgentBranchesTable.userId] = userId.value
+            row[ScopedAgentBranchesTable.agentId] = agentId.value
+            row[branchId] = branch.id
+            row[name] = branch.name
+            row[checkpointMessageId] = branch.checkpointMessageId.value
+            row[createdAt] = branch.createdAt.takeIf { it > 0 } ?: now
+        }
+
+        var copyIndex = 0
+        for (msg in messagesToCopy) {
+            copyIndex++
+            val newMsgId = "${branch.id}-$copyIndex"
+            ScopedAgentMessagesTable.insert { row ->
+                row[ScopedAgentMessagesTable.userId] = userId.value
+                row[id] = newMsgId
+                row[ScopedAgentMessagesTable.agentId] = agentId.value
+                row[branchId] = branch.id
+                row[role] = msg[ScopedAgentMessagesTable.role]
+                row[text] = msg[ScopedAgentMessagesTable.text]
+                row[status] = msg[ScopedAgentMessagesTable.status]
+                row[ScopedAgentMessagesTable.createdAt] = msg[ScopedAgentMessagesTable.createdAt]
+                row[provider] = msg[ScopedAgentMessagesTable.provider]
+                row[model] = msg[ScopedAgentMessagesTable.model]
+                row[usageInputTokens] = msg[ScopedAgentMessagesTable.usageInputTokens]
+                row[usageOutputTokens] = msg[ScopedAgentMessagesTable.usageOutputTokens]
+                row[usageTotalTokens] = msg[ScopedAgentMessagesTable.usageTotalTokens]
+                row[latencyMs] = msg[ScopedAgentMessagesTable.latencyMs]
+            }
+        }
+
+        ScopedAgentsTable.update({
+            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
+        }) { row ->
+            row[ScopedAgentsTable.activeBranchId] = branch.id
+            row[updatedAt] = now
+        }
+
+        bumpVersionTx(userId, now)
+        readStateTx(userId)
+    }
+
+    override suspend fun switchBranch(
+        userId: UserId,
+        agentId: AgentId,
+        branchId: String,
+    ): Result<AgentState> = runDb {
+        val now = nowMillis()
+        val targetBranchId = branchId.takeIf { it != MAIN_BRANCH_ID }
+
+        if (targetBranchId != null) {
+            val exists = ScopedAgentBranchesTable.selectAll().where {
+                (ScopedAgentBranchesTable.userId eq userId.value) and
+                    (ScopedAgentBranchesTable.agentId eq agentId.value) and
+                    (ScopedAgentBranchesTable.branchId eq targetBranchId)
+            }.any()
+            require(exists) { "Branch not found: $branchId" }
+        }
+
+        ScopedAgentsTable.update({
+            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
+        }) { row ->
+            row[ScopedAgentsTable.activeBranchId] = targetBranchId
+            row[updatedAt] = now
+        }
+
+        bumpVersionTx(userId, now)
+        readStateTx(userId)
+    }
+
+    override suspend fun deleteBranch(
+        userId: UserId,
+        agentId: AgentId,
+        branchId: String,
+    ): Result<AgentState> = runDb {
+        val now = nowMillis()
+
+        ScopedAgentMessagesTable.deleteWhere {
+            (ScopedAgentMessagesTable.userId eq userId.value) and
+                (ScopedAgentMessagesTable.agentId eq agentId.value) and
+                (ScopedAgentMessagesTable.branchId eq branchId)
+        }
+        ScopedAgentBranchesTable.deleteWhere {
+            (ScopedAgentBranchesTable.userId eq userId.value) and
+                (ScopedAgentBranchesTable.agentId eq agentId.value) and
+                (ScopedAgentBranchesTable.branchId eq branchId)
+        }
+
+        val currentActive = ScopedAgentsTable.selectAll().where {
+            (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
+        }.singleOrNull()?.get(ScopedAgentsTable.activeBranchId)
+
+        if (currentActive == branchId) {
+            ScopedAgentsTable.update({
+                (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value)
+            }) { row ->
+                row[ScopedAgentsTable.activeBranchId] = null
+                row[updatedAt] = now
+            }
+        }
+
+        bumpVersionTx(userId, now)
+        readStateTx(userId)
+    }
+
+    override suspend fun getBranches(userId: UserId, agentId: AgentId): Result<List<AgentBranch>> = runDb {
+        ScopedAgentBranchesTable.selectAll()
+            .where {
+                (ScopedAgentBranchesTable.userId eq userId.value) and
+                    (ScopedAgentBranchesTable.agentId eq agentId.value)
+            }
+            .orderBy(ScopedAgentBranchesTable.createdAt, SortOrder.ASC)
+            .map { row ->
+                AgentBranch(
+                    id = row[ScopedAgentBranchesTable.branchId],
+                    name = row[ScopedAgentBranchesTable.name],
+                    checkpointMessageId = AgentMessageId(row[ScopedAgentBranchesTable.checkpointMessageId]),
+                    createdAt = row[ScopedAgentBranchesTable.createdAt],
+                )
+            }
+    }
+
     private suspend fun <T> runDb(block: () -> T): Result<T> = runCatching {
         withContext(Dispatchers.IO) {
             ensureInitialized()
@@ -465,6 +668,8 @@ class PostgresAgentRepository(
                     ScopedAgentMessagesTable,
                     ScopedAgentContextMemoryTable,
                     ScopedAgentMessageEmbeddingsTable,
+                    ScopedAgentFactsTable,
+                    ScopedAgentBranchesTable,
                 )
             }
             initialized = true
@@ -478,21 +683,44 @@ class PostgresAgentRepository(
             .where { ScopedAgentContextMemoryTable.userId eq userId.value }
             .associateBy { it[ScopedAgentContextMemoryTable.agentId] }
 
-        val messageRows = ScopedAgentMessagesTable.selectAll()
+        val allMessageRows = ScopedAgentMessagesTable.selectAll()
             .where { ScopedAgentMessagesTable.userId eq userId.value }
             .orderBy(ScopedAgentMessagesTable.createdAt, SortOrder.ASC)
             .orderBy(ScopedAgentMessagesTable.id, SortOrder.ASC)
+            .toList()
             .groupBy { it[ScopedAgentMessagesTable.agentId] }
-            .mapValues { (_, rows) -> rows.map(::toMessage) }
+
+        val branchesByAgent = ScopedAgentBranchesTable.selectAll()
+            .where { ScopedAgentBranchesTable.userId eq userId.value }
+            .orderBy(ScopedAgentBranchesTable.createdAt, SortOrder.ASC)
+            .toList()
+            .groupBy { it[ScopedAgentBranchesTable.agentId] }
 
         val agents = ScopedAgentsTable.selectAll()
             .where { ScopedAgentsTable.userId eq userId.value }
             .orderBy(ScopedAgentsTable.position, SortOrder.ASC)
             .map { row ->
+                val agentIdStr = row[ScopedAgentsTable.id]
+                val activeBranch = row[ScopedAgentsTable.activeBranchId]
+                val agentMessages = allMessageRows[agentIdStr].orEmpty()
+                val filteredMessages = if (activeBranch != null) {
+                    agentMessages.filter { it[ScopedAgentMessagesTable.branchId] == activeBranch }
+                } else {
+                    agentMessages.filter { it[ScopedAgentMessagesTable.branchId] == null }
+                }
+                val branches = branchesByAgent[agentIdStr].orEmpty().map { branchRow ->
+                    AgentBranch(
+                        id = branchRow[ScopedAgentBranchesTable.branchId],
+                        name = branchRow[ScopedAgentBranchesTable.name],
+                        checkpointMessageId = AgentMessageId(branchRow[ScopedAgentBranchesTable.checkpointMessageId]),
+                        createdAt = branchRow[ScopedAgentBranchesTable.createdAt],
+                    )
+                }
                 toAgent(
                     row = row,
-                    messages = messageRows[row[ScopedAgentsTable.id]].orEmpty(),
-                    contextMemory = contextMemoryByAgent[row[ScopedAgentsTable.id]],
+                    messages = filteredMessages.map(::toMessage),
+                    contextMemory = contextMemoryByAgent[agentIdStr],
+                    branches = branches,
                 )
             }
 
@@ -550,6 +778,7 @@ class PostgresAgentRepository(
         row: ResultRow,
         messages: List<AgentMessage>,
         contextMemory: ResultRow?,
+        branches: List<AgentBranch> = emptyList(),
     ): Agent {
         val hasUserMessages = messages.any { it.role == AgentMessageRole.USER }
         return Agent(
@@ -566,6 +795,8 @@ class PostgresAgentRepository(
             summarizedUntilCreatedAt = contextMemory?.get(ScopedAgentContextMemoryTable.summarizedUntilCreatedAt) ?: 0L,
             contextSummaryUpdatedAt = contextMemory?.get(ScopedAgentContextMemoryTable.updatedAt) ?: 0L,
             messages = messages,
+            branches = branches,
+            activeBranchId = row[ScopedAgentsTable.activeBranchId],
         )
     }
 
@@ -606,13 +837,26 @@ class PostgresAgentRepository(
     }
 
     private fun toContextConfig(row: ResultRow, locked: Boolean): AgentContextConfig {
+        val recentN = row[ScopedAgentsTable.contextRecentMessagesN]
+            .takeIf { it > 0 }
+            ?: config.contextRecentMaxMessages.takeIf { it > 0 }
+            ?: DEFAULT_RECENT_MESSAGES_N
         return when (row[ScopedAgentsTable.contextStrategy]) {
             CONTEXT_STRATEGY_FULL_HISTORY -> FullHistoryAgentContextConfig(locked = locked)
+            CONTEXT_STRATEGY_SLIDING_WINDOW -> SlidingWindowAgentContextConfig(
+                windowSize = recentN.takeIf { it > 0 } ?: DEFAULT_SLIDING_WINDOW_SIZE,
+                locked = locked,
+            )
+            CONTEXT_STRATEGY_STICKY_FACTS -> StickyFactsAgentContextConfig(
+                recentMessagesN = recentN,
+                locked = locked,
+            )
+            CONTEXT_STRATEGY_BRANCHING -> BranchingAgentContextConfig(
+                recentMessagesN = recentN,
+                locked = locked,
+            )
             else -> RollingSummaryAgentContextConfig(
-                recentMessagesN = row[ScopedAgentsTable.contextRecentMessagesN]
-                    .takeIf { it > 0 }
-                    ?: config.contextRecentMaxMessages.takeIf { it > 0 }
-                    ?: DEFAULT_RECENT_MESSAGES_N,
+                recentMessagesN = recentN,
                 summarizeEveryK = row[ScopedAgentsTable.contextSummarizeEveryK]
                     .takeIf { it > 0 }
                     ?: config.contextSummarizeEveryMessages.takeIf { it > 0 }
@@ -626,20 +870,29 @@ class PostgresAgentRepository(
         return when (config) {
             is FullHistoryAgentContextConfig -> CONTEXT_STRATEGY_FULL_HISTORY
             is RollingSummaryAgentContextConfig -> CONTEXT_STRATEGY_ROLLING_SUMMARY
+            is SlidingWindowAgentContextConfig -> CONTEXT_STRATEGY_SLIDING_WINDOW
+            is StickyFactsAgentContextConfig -> CONTEXT_STRATEGY_STICKY_FACTS
+            is BranchingAgentContextConfig -> CONTEXT_STRATEGY_BRANCHING
         }
     }
 
     private fun contextRecentMessagesNValue(config: AgentContextConfig): Int {
         return when (config) {
-            is FullHistoryAgentContextConfig -> config.contextDefaultRecentMessagesN()
+            is FullHistoryAgentContextConfig -> DEFAULT_RECENT_MESSAGES_N
             is RollingSummaryAgentContextConfig -> config.recentMessagesN
+            is SlidingWindowAgentContextConfig -> config.windowSize
+            is StickyFactsAgentContextConfig -> config.recentMessagesN
+            is BranchingAgentContextConfig -> config.recentMessagesN
         }
     }
 
     private fun contextSummarizeEveryKValue(config: AgentContextConfig): Int {
         return when (config) {
-            is FullHistoryAgentContextConfig -> config.contextDefaultSummarizeEveryK()
+            is FullHistoryAgentContextConfig -> DEFAULT_SUMMARIZE_EVERY_K
             is RollingSummaryAgentContextConfig -> config.summarizeEveryK
+            is SlidingWindowAgentContextConfig -> DEFAULT_SUMMARIZE_EVERY_K
+            is StickyFactsAgentContextConfig -> DEFAULT_SUMMARIZE_EVERY_K
+            is BranchingAgentContextConfig -> DEFAULT_SUMMARIZE_EVERY_K
         }
     }
 
@@ -673,8 +926,7 @@ class PostgresAgentRepository(
     private fun nowMillis(): Long = System.currentTimeMillis()
 }
 
-private fun FullHistoryAgentContextConfig.contextDefaultRecentMessagesN(): Int = DEFAULT_RECENT_MESSAGES_N
-private fun FullHistoryAgentContextConfig.contextDefaultSummarizeEveryK(): Int = DEFAULT_SUMMARIZE_EVERY_K
+private const val MAIN_BRANCH_ID = "main"
 
 private object ScopedAgentStateTable : Table("scoped_agent_state") {
     val userId = varchar("user_id", 128)
@@ -698,6 +950,7 @@ private object ScopedAgentsTable : Table("scoped_agents") {
     val contextStrategy = varchar("context_strategy", 64).default(CONTEXT_STRATEGY_ROLLING_SUMMARY)
     val contextRecentMessagesN = integer("context_recent_messages_n").default(DEFAULT_RECENT_MESSAGES_N)
     val contextSummarizeEveryK = integer("context_summarize_every_k").default(DEFAULT_SUMMARIZE_EVERY_K)
+    val activeBranchId = varchar("active_branch_id", 64).nullable().default(null)
     val status = varchar("status", 255)
     val position = integer("position")
     val createdAt = long("created_at")
@@ -710,6 +963,7 @@ private object ScopedAgentMessagesTable : Table("scoped_agent_messages") {
     val userId = varchar("user_id", 128)
     val id = varchar("id", 64)
     val agentId = varchar("agent_id", 64)
+    val branchId = varchar("branch_id", 64).nullable().default(null)
     val role = varchar("role", 32)
     val text = text("text")
     val status = varchar("status", 32)
@@ -747,6 +1001,26 @@ private object ScopedAgentMessageEmbeddingsTable : Table("scoped_agent_message_e
     override val primaryKey = PrimaryKey(userId, agentId, messageId, chunkIndex)
 }
 
+private object ScopedAgentFactsTable : Table("scoped_agent_facts") {
+    val userId = varchar("user_id", 128)
+    val agentId = varchar("agent_id", 64)
+    val factsJson = text("facts_json")
+    val updatedAt = long("updated_at")
+
+    override val primaryKey = PrimaryKey(userId, agentId)
+}
+
+private object ScopedAgentBranchesTable : Table("scoped_agent_branches") {
+    val userId = varchar("user_id", 128)
+    val agentId = varchar("agent_id", 64)
+    val branchId = varchar("branch_id", 64)
+    val name = varchar("name", 255)
+    val checkpointMessageId = varchar("checkpoint_message_id", 64)
+    val createdAt = long("created_at")
+
+    override val primaryKey = PrimaryKey(userId, agentId, branchId)
+}
+
 private data class SearchCandidate(
     val messageId: AgentMessageId,
     val text: String,
@@ -761,3 +1035,6 @@ private const val ROLE_USER = "user"
 private const val ROLE_ASSISTANT = "assistant"
 private const val CONTEXT_STRATEGY_FULL_HISTORY = "full_history"
 private const val CONTEXT_STRATEGY_ROLLING_SUMMARY = "rolling_summary_recent_n"
+private const val CONTEXT_STRATEGY_SLIDING_WINDOW = "sliding_window"
+private const val CONTEXT_STRATEGY_STICKY_FACTS = "sticky_facts"
+private const val CONTEXT_STRATEGY_BRANCHING = "branching"

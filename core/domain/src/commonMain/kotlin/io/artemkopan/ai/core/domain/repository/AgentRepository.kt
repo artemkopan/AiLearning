@@ -1,14 +1,6 @@
 package io.artemkopan.ai.core.domain.repository
 
-import io.artemkopan.ai.core.domain.model.AgentDraft
-import io.artemkopan.ai.core.domain.model.AgentId
-import io.artemkopan.ai.core.domain.model.AgentContextMemory
-import io.artemkopan.ai.core.domain.model.AgentMessage
-import io.artemkopan.ai.core.domain.model.AgentMessageId
-import io.artemkopan.ai.core.domain.model.RetrievedContextChunk
-import io.artemkopan.ai.core.domain.model.AgentState
-import io.artemkopan.ai.core.domain.model.AgentStatus
-import io.artemkopan.ai.core.domain.model.UserId
+import io.artemkopan.ai.core.domain.model.*
 
 interface AgentRepository {
     suspend fun getState(userId: UserId): Result<AgentState>
@@ -52,4 +44,12 @@ interface AgentRepository {
         limit: Int,
         minScore: Double,
     ): Result<List<RetrievedContextChunk>>
+
+    suspend fun getAgentFacts(userId: UserId, agentId: AgentId): Result<AgentFacts?>
+    suspend fun upsertAgentFacts(userId: UserId, facts: AgentFacts): Result<Unit>
+
+    suspend fun createBranch(userId: UserId, agentId: AgentId, branch: AgentBranch): Result<AgentState>
+    suspend fun switchBranch(userId: UserId, agentId: AgentId, branchId: String): Result<AgentState>
+    suspend fun deleteBranch(userId: UserId, agentId: AgentId, branchId: String): Result<AgentState>
+    suspend fun getBranches(userId: UserId, agentId: AgentId): Result<List<AgentBranch>>
 }

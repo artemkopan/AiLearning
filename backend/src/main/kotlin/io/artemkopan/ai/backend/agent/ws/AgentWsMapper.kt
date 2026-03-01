@@ -44,6 +44,15 @@ class AgentWsMapper {
                                 latencyMs = message.latencyMs,
                             )
                         },
+                        branches = agent.branches.map { branch ->
+                            BranchDto(
+                                id = branch.id,
+                                name = branch.name,
+                                checkpointMessageId = branch.checkpointMessageId.value,
+                                createdAt = branch.createdAt,
+                            )
+                        },
+                        activeBranchId = agent.activeBranchId,
                     )
                 },
                 activeAgentId = state.activeAgentId?.value,

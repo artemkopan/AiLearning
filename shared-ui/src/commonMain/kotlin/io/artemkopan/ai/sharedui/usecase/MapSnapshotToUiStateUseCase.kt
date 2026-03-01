@@ -60,6 +60,8 @@ class MapSnapshotToUiStateUseCase(
                         latencyMs = message.latencyMs,
                     )
                 },
+                branches = dto.branches,
+                activeBranchId = dto.activeBranchId,
                 draftMessage = preservedDraft,
             )
             if (config != null && dto.model != normalizedModel && normalizedModel.isNotBlank()) {

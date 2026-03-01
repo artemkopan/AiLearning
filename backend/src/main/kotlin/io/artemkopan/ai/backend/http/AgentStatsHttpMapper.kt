@@ -1,9 +1,8 @@
 package io.artemkopan.ai.backend.http
 
+import io.artemkopan.ai.backend.agent.ws.toDto
 import io.artemkopan.ai.core.application.usecase.stats.AgentStats
 import io.artemkopan.ai.core.domain.model.AgentMessageRole
-import io.artemkopan.ai.core.domain.model.FullHistoryAgentContextConfig
-import io.artemkopan.ai.core.domain.model.RollingSummaryAgentContextConfig
 import io.artemkopan.ai.sharedcontract.*
 
 class AgentStatsHttpMapper {
@@ -13,14 +12,7 @@ class AgentStatsHttpMapper {
             title = stats.title,
             model = stats.model,
             agentMode = parseAgentMode(stats.agentMode),
-            contextConfig = when (val config = stats.contextConfig) {
-                is FullHistoryAgentContextConfig -> FullHistoryContextConfigDto(locked = config.locked)
-                is RollingSummaryAgentContextConfig -> RollingSummaryContextConfigDto(
-                    recentMessagesN = config.recentMessagesN,
-                    summarizeEveryK = config.summarizeEveryK,
-                    locked = config.locked,
-                )
-            },
+            contextConfig = stats.contextConfig.toDto(),
             contextSummary = stats.contextSummary,
             summarizedUntilCreatedAt = stats.summarizedUntilCreatedAt,
             contextSummaryUpdatedAt = stats.contextSummaryUpdatedAt,

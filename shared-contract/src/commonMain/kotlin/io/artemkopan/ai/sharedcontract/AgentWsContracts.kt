@@ -57,6 +57,7 @@ data class SubmitAgentCommandDto(
 data class SendAgentMessageCommandDto(
     val agentId: String,
     val text: String,
+    val skipGeneration: Boolean = false,
     val requestId: String? = null,
 ) : AgentWsClientMessageDto
 
@@ -67,6 +68,39 @@ data class StopAgentMessageCommandDto(
     val messageId: String,
     val requestId: String? = null,
 ) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("create_branch")
+data class CreateBranchCommandDto(
+    val agentId: String,
+    val checkpointMessageId: String,
+    val branchName: String,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("switch_branch")
+data class SwitchBranchCommandDto(
+    val agentId: String,
+    val branchId: String,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("delete_branch")
+data class DeleteBranchCommandDto(
+    val agentId: String,
+    val branchId: String,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+data class BranchDto(
+    val id: String,
+    val name: String,
+    val checkpointMessageId: String,
+    val createdAt: Long,
+)
 
 @Serializable
 data class AgentStateSnapshotDto(

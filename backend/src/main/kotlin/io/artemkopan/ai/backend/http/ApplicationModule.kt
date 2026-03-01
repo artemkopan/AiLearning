@@ -10,6 +10,7 @@ import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.usecase.*
 import io.artemkopan.ai.core.application.usecase.stats.GetAgentStatsUseCase
+import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.core.domain.repository.LlmRepository
 import io.artemkopan.ai.sharedcontract.*
 import io.ktor.http.*
@@ -71,6 +72,7 @@ fun Application.module(
     val failAgentMessageUseCase by inject<FailAgentMessageUseCase>()
     val stopAgentMessageUseCase by inject<StopAgentMessageUseCase>()
     val getAgentStatsUseCase by inject<GetAgentStatsUseCase>()
+    val agentRepository by inject<AgentRepository>()
     val modelCatalog by inject<LlmModelCatalog>()
     val injectedLlmRepository by inject<LlmRepository>()
     val llmRepository = llmRepositoryOverride ?: injectedLlmRepository
@@ -133,6 +135,7 @@ fun Application.module(
         stopAgentMessageUseCase = stopAgentMessageUseCase,
         generateTextUseCase = generateTextUseCase,
         mapFailureToUserMessageUseCase = mapFailureToUserMessageUseCase,
+        agentRepository = agentRepository,
         sessionRegistry = wsSessionRegistry,
         mapper = wsMapper,
         json = appJson,

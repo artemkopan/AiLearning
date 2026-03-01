@@ -2,7 +2,8 @@ package io.artemkopan.ai.backend.agent.ws
 
 import io.artemkopan.ai.core.application.model.*
 import io.artemkopan.ai.core.application.usecase.*
-import io.artemkopan.ai.core.domain.model.AgentState
+import io.artemkopan.ai.core.domain.model.*
+import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.sharedcontract.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
@@ -24,6 +25,7 @@ class AgentWsMessageHandler(
     private val stopAgentMessageUseCase: StopAgentMessageUseCase,
     private val generateTextUseCase: GenerateTextUseCase,
     private val mapFailureToUserMessageUseCase: MapFailureToUserMessageUseCase,
+    private val agentRepository: AgentRepository,
     private val sessionRegistry: AgentWsSessionRegistry,
     private val mapper: AgentWsMapper,
     private val json: Json,
@@ -99,6 +101,11 @@ class AgentWsMessageHandler(
             is SendAgentMessageCommandDto -> {
                 if (isAgentBusy(userScope, parsed.agentId)) {
                     sendError(session, "This agent already has a processing message.", parsed.requestId)
+                    return
+                }
+
+                if (parsed.skipGeneration) {
+                    appendUserMessageOnly(userScope, parsed, session)
                     return
                 }
 
@@ -199,6 +206,43 @@ class AgentWsMessageHandler(
 
             is SubmitAgentCommandDto -> {
                 sendError(session, "submit_agent is deprecated. Use send_agent_message.", parsed.requestId)
+            }
+
+            is CreateBranchCommandDto -> {
+                val branchId = "branch-${System.currentTimeMillis()}"
+                val branch = AgentBranch(
+                    id = branchId,
+                    name = parsed.branchName,
+                    checkpointMessageId = AgentMessageId(parsed.checkpointMessageId),
+                    createdAt = 0L,
+                )
+                agentRepository.createBranch(
+                    userId = UserId(userScope),
+                    agentId = AgentId(parsed.agentId),
+                    branch = branch,
+                )
+                    .onSuccess { state -> broadcastSnapshot(userScope, state) }
+                    .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
+            }
+
+            is SwitchBranchCommandDto -> {
+                agentRepository.switchBranch(
+                    userId = UserId(userScope),
+                    agentId = AgentId(parsed.agentId),
+                    branchId = parsed.branchId,
+                )
+                    .onSuccess { state -> broadcastSnapshot(userScope, state) }
+                    .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
+            }
+
+            is DeleteBranchCommandDto -> {
+                agentRepository.deleteBranch(
+                    userId = UserId(userScope),
+                    agentId = AgentId(parsed.agentId),
+                    branchId = parsed.branchId,
+                )
+                    .onSuccess { state -> broadcastSnapshot(userScope, state) }
+                    .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
             }
         }
     }
@@ -321,6 +365,25 @@ class AgentWsMessageHandler(
     }
 
     private fun jobKey(userScope: String, agentId: String): String = "$userScope::$agentId"
+
+    private suspend fun appendUserMessageOnly(
+        userScope: String,
+        parsed: SendAgentMessageCommandDto,
+        session: DefaultWebSocketServerSession,
+    ) {
+        val userId = UserId(userScope)
+        val agentId = AgentId(parsed.agentId)
+        val message = AgentMessage(
+            id = AgentMessageId("info-${System.currentTimeMillis()}"),
+            role = AgentMessageRole.USER,
+            text = parsed.text,
+            status = "done",
+            createdAt = 0L,
+        )
+        agentRepository.appendMessage(userId, agentId, message)
+            .onSuccess { state -> broadcastSnapshot(userScope, state) }
+            .onFailure { throwable -> sendOperationFailure(session, throwable, parsed.requestId) }
+    }
 }
 
 private data class ProcessingJob(

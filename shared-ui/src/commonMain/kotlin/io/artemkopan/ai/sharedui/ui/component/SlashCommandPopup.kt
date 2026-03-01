@@ -33,6 +33,13 @@ fun SlashCommandPopup(
         when (stage) {
             Stage.ROOT -> {
                 CommandOption(
+                    label = "ALL AGENTS STATS",
+                    onClick = {
+                        onInsertToken("/agents-stats")
+                        onDismiss()
+                    }
+                )
+                CommandOption(
                     label = "AGENTS",
                     onClick = { stage = Stage.AGENTS }
                 )

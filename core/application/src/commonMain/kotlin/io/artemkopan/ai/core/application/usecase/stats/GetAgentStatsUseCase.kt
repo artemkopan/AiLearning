@@ -4,9 +4,7 @@ import io.artemkopan.ai.core.application.usecase.BuildContextPromptUseCase
 import io.artemkopan.ai.core.application.usecase.EstimatePromptTokensUseCase
 import io.artemkopan.ai.core.application.usecase.ResolveAgentModeUseCase
 import io.artemkopan.ai.core.application.usecase.parseUserIdOrError
-import io.artemkopan.ai.core.domain.model.AgentMessageRole
-import io.artemkopan.ai.core.domain.model.FullHistoryAgentContextConfig
-import io.artemkopan.ai.core.domain.model.RollingSummaryAgentContextConfig
+import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 
 class GetAgentStatsUseCase(
@@ -38,6 +36,27 @@ class GetAgentStatsUseCase(
                             buildContextPromptUseCase.execute(
                                 summary = agent.contextSummary,
                                 messages = recent,
+                                retrievedMemory = emptyList(),
+                            )
+                        }
+                        is SlidingWindowAgentContextConfig -> {
+                            buildContextPromptUseCase.execute(
+                                summary = "",
+                                messages = activeMessages.takeLast(config.windowSize),
+                                retrievedMemory = emptyList(),
+                            )
+                        }
+                        is StickyFactsAgentContextConfig -> {
+                            buildContextPromptUseCase.execute(
+                                summary = agent.contextSummary,
+                                messages = activeMessages.takeLast(config.recentMessagesN),
+                                retrievedMemory = emptyList(),
+                            )
+                        }
+                        is BranchingAgentContextConfig -> {
+                            buildContextPromptUseCase.execute(
+                                summary = "",
+                                messages = activeMessages.takeLast(config.recentMessagesN),
                                 retrievedMemory = emptyList(),
                             )
                         }

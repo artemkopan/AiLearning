@@ -78,6 +78,8 @@ data class AgentState(
     val summarizedUntilCreatedAt: Long = 0,
     val contextSummaryUpdatedAt: Long = 0,
     val messages: List<AgentMessageState> = emptyList(),
+    val branches: List<BranchDto> = emptyList(),
+    val activeBranchId: String? = null,
     val draftMessage: String = "",
 ) {
     val isLoading: Boolean
@@ -106,7 +108,10 @@ sealed interface UiAction {
     data class ContextStrategyChanged(val value: String) : UiAction
     data class ContextRecentMessagesChanged(val value: String) : UiAction
     data class ContextSummarizeEveryChanged(val value: String) : UiAction
-    data class InsertSlashToken(val value: String) : UiAction
+    data class ContextWindowSizeChanged(val value: String) : UiAction
+    data class CreateBranch(val checkpointMessageId: String, val name: String) : UiAction
+    data class SwitchBranch(val branchId: String) : UiAction
+    data class DeleteBranch(val branchId: String) : UiAction
     data object Submit : UiAction
     data object StopQueue : UiAction
     data object DismissError : UiAction
@@ -152,7 +157,10 @@ class AppViewModel(
             is UiAction.ContextStrategyChanged -> handleContextStrategyChanged(action.value)
             is UiAction.ContextRecentMessagesChanged -> handleContextRecentMessagesChanged(action.value)
             is UiAction.ContextSummarizeEveryChanged -> handleContextSummarizeEveryChanged(action.value)
-            is UiAction.InsertSlashToken -> handleInsertSlashToken(action.value)
+            is UiAction.ContextWindowSizeChanged -> handleContextWindowSizeChanged(action.value)
+            is UiAction.CreateBranch -> handleCreateBranch(action.checkpointMessageId, action.name)
+            is UiAction.SwitchBranch -> handleSwitchBranch(action.branchId)
+            is UiAction.DeleteBranch -> handleDeleteBranch(action.branchId)
             is UiAction.Submit -> handleSubmit()
             is UiAction.StopQueue -> handleStopQueue()
             is UiAction.DismissError -> handleDismissError()
@@ -255,7 +263,24 @@ class AppViewModel(
                 "full_history" -> current.copy(
                     contextConfig = FullHistoryContextConfigDto(locked = false)
                 )
-
+                "sliding_window" -> current.copy(
+                    contextConfig = SlidingWindowContextConfigDto(
+                        windowSize = (current.contextConfig as? SlidingWindowContextConfigDto)?.windowSize ?: DEFAULT_SLIDING_WINDOW_SIZE,
+                        locked = false,
+                    )
+                )
+                "sticky_facts" -> current.copy(
+                    contextConfig = StickyFactsContextConfigDto(
+                        recentMessagesN = (current.contextConfig as? StickyFactsContextConfigDto)?.recentMessagesN ?: 12,
+                        locked = false,
+                    )
+                )
+                "branching" -> current.copy(
+                    contextConfig = BranchingContextConfigDto(
+                        recentMessagesN = (current.contextConfig as? BranchingContextConfigDto)?.recentMessagesN ?: 12,
+                        locked = false,
+                    )
+                )
                 else -> current.copy(
                     contextConfig = RollingSummaryContextConfigDto(
                         recentMessagesN = (current.contextConfig as? RollingSummaryContextConfigDto)?.recentMessagesN ?: 12,
@@ -272,11 +297,14 @@ class AppViewModel(
         val parsed = value.toIntOrNull() ?: return
         if (parsed <= 0) return
         updateActiveAgent { current ->
-            val config = current.contextConfig as? RollingSummaryContextConfigDto ?: return@updateActiveAgent current
-            if (config.locked) return@updateActiveAgent current
-            current.copy(
-                contextConfig = config.copy(recentMessagesN = parsed)
-            )
+            if (current.contextConfig.locked) return@updateActiveAgent current
+            val updated = when (val config = current.contextConfig) {
+                is RollingSummaryContextConfigDto -> config.copy(recentMessagesN = parsed)
+                is StickyFactsContextConfigDto -> config.copy(recentMessagesN = parsed)
+                is BranchingContextConfigDto -> config.copy(recentMessagesN = parsed)
+                else -> return@updateActiveAgent current
+            }
+            current.copy(contextConfig = updated)
         }
         sendActiveDraftUpdate()
     }
@@ -294,16 +322,47 @@ class AppViewModel(
         sendActiveDraftUpdate()
     }
 
-    private fun handleInsertSlashToken(value: String) {
+    private fun handleContextWindowSizeChanged(value: String) {
+        val parsed = value.toIntOrNull() ?: return
+        if (parsed <= 0) return
         updateActiveAgent { current ->
-            val draft = current.draftMessage
-            val trimmed = draft.trimEnd()
-            val normalized = when {
-                trimmed.endsWith("/") -> "${trimmed.dropLast(1).trimEnd()} $value"
-                trimmed.isEmpty() -> value
-                else -> "$trimmed $value"
-            }.trim()
-            current.copy(draftMessage = "$normalized ")
+            val config = current.contextConfig as? SlidingWindowContextConfigDto ?: return@updateActiveAgent current
+            if (config.locked) return@updateActiveAgent current
+            current.copy(
+                contextConfig = config.copy(windowSize = parsed)
+            )
+        }
+        sendActiveDraftUpdate()
+    }
+
+    private fun handleCreateBranch(checkpointMessageId: String, name: String) {
+        val active = getActiveAgent() ?: return
+        sendCommand {
+            CreateBranchCommandDto(
+                agentId = active.id.value,
+                checkpointMessageId = checkpointMessageId,
+                branchName = name,
+            )
+        }
+    }
+
+    private fun handleSwitchBranch(branchId: String) {
+        val active = getActiveAgent() ?: return
+        sendCommand {
+            SwitchBranchCommandDto(
+                agentId = active.id.value,
+                branchId = branchId,
+            )
+        }
+    }
+
+    private fun handleDeleteBranch(branchId: String) {
+        val active = getActiveAgent() ?: return
+        sendCommand {
+            DeleteBranchCommandDto(
+                agentId = active.id.value,
+                branchId = branchId,
+            )
         }
     }
 

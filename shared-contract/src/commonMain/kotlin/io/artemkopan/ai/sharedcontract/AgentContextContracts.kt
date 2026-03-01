@@ -23,6 +23,27 @@ data class RollingSummaryContextConfigDto(
 ) : AgentContextConfigDto
 
 @Serializable
+@SerialName("sliding_window")
+data class SlidingWindowContextConfigDto(
+    val windowSize: Int = DEFAULT_SLIDING_WINDOW_SIZE,
+    override val locked: Boolean = false,
+) : AgentContextConfigDto
+
+@Serializable
+@SerialName("sticky_facts")
+data class StickyFactsContextConfigDto(
+    val recentMessagesN: Int = DEFAULT_RECENT_MESSAGES_N,
+    override val locked: Boolean = false,
+) : AgentContextConfigDto
+
+@Serializable
+@SerialName("branching")
+data class BranchingContextConfigDto(
+    val recentMessagesN: Int = DEFAULT_RECENT_MESSAGES_N,
+    override val locked: Boolean = false,
+) : AgentContextConfigDto
+
+@Serializable
 data class AgentStatsResponseDto(
     val agents: List<AgentStatsDto>,
 )
@@ -76,3 +97,4 @@ data class AgentRecentTurnStatsDto(
 
 const val DEFAULT_RECENT_MESSAGES_N = 12
 const val DEFAULT_SUMMARIZE_EVERY_K = 10
+const val DEFAULT_SLIDING_WINDOW_SIZE = 20

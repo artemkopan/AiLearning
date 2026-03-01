@@ -105,4 +105,6 @@ data class AgentDto(
     val summarizedUntilCreatedAt: Long = 0,
     val contextSummaryUpdatedAt: Long = 0,
     val messages: List<AgentMessageDto> = emptyList(),
+    val branches: List<BranchDto> = emptyList(),
+    val activeBranchId: String? = null,
 )

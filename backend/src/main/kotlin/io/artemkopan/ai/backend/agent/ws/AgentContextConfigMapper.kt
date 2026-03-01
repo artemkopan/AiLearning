@@ -1,11 +1,7 @@
 package io.artemkopan.ai.backend.agent.ws
 
-import io.artemkopan.ai.core.domain.model.AgentContextConfig
-import io.artemkopan.ai.core.domain.model.FullHistoryAgentContextConfig
-import io.artemkopan.ai.core.domain.model.RollingSummaryAgentContextConfig
-import io.artemkopan.ai.sharedcontract.AgentContextConfigDto
-import io.artemkopan.ai.sharedcontract.FullHistoryContextConfigDto
-import io.artemkopan.ai.sharedcontract.RollingSummaryContextConfigDto
+import io.artemkopan.ai.core.domain.model.*
+import io.artemkopan.ai.sharedcontract.*
 
 internal fun AgentContextConfig.toDto(): AgentContextConfigDto {
     return when (this) {
@@ -13,6 +9,18 @@ internal fun AgentContextConfig.toDto(): AgentContextConfigDto {
         is RollingSummaryAgentContextConfig -> RollingSummaryContextConfigDto(
             recentMessagesN = recentMessagesN,
             summarizeEveryK = summarizeEveryK,
+            locked = locked,
+        )
+        is SlidingWindowAgentContextConfig -> SlidingWindowContextConfigDto(
+            windowSize = windowSize,
+            locked = locked,
+        )
+        is StickyFactsAgentContextConfig -> StickyFactsContextConfigDto(
+            recentMessagesN = recentMessagesN,
+            locked = locked,
+        )
+        is BranchingAgentContextConfig -> BranchingContextConfigDto(
+            recentMessagesN = recentMessagesN,
             locked = locked,
         )
     }
@@ -24,6 +32,18 @@ internal fun AgentContextConfigDto.toDomain(): AgentContextConfig {
         is RollingSummaryContextConfigDto -> RollingSummaryAgentContextConfig(
             recentMessagesN = recentMessagesN,
             summarizeEveryK = summarizeEveryK,
+            locked = locked,
+        )
+        is SlidingWindowContextConfigDto -> SlidingWindowAgentContextConfig(
+            windowSize = windowSize,
+            locked = locked,
+        )
+        is StickyFactsContextConfigDto -> StickyFactsAgentContextConfig(
+            recentMessagesN = recentMessagesN,
+            locked = locked,
+        )
+        is BranchingContextConfigDto -> BranchingAgentContextConfig(
+            recentMessagesN = recentMessagesN,
             locked = locked,
         )
     }

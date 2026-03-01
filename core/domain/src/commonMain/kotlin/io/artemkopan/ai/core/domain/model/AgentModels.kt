@@ -59,6 +59,34 @@ data class RollingSummaryAgentContextConfig(
     override val locked: Boolean = false,
 ) : AgentContextConfig
 
+data class SlidingWindowAgentContextConfig(
+    val windowSize: Int = DEFAULT_SLIDING_WINDOW_SIZE,
+    override val locked: Boolean = false,
+) : AgentContextConfig
+
+data class StickyFactsAgentContextConfig(
+    val recentMessagesN: Int = DEFAULT_RECENT_MESSAGES_N,
+    override val locked: Boolean = false,
+) : AgentContextConfig
+
+data class BranchingAgentContextConfig(
+    val recentMessagesN: Int = DEFAULT_RECENT_MESSAGES_N,
+    override val locked: Boolean = false,
+) : AgentContextConfig
+
+data class AgentFacts(
+    val agentId: AgentId,
+    val factsJson: String,
+    val updatedAt: Long,
+)
+
+data class AgentBranch(
+    val id: String,
+    val name: String,
+    val checkpointMessageId: AgentMessageId,
+    val createdAt: Long,
+)
+
 data class Agent(
     val id: AgentId,
     val title: String,
@@ -73,6 +101,8 @@ data class Agent(
     val summarizedUntilCreatedAt: Long = 0,
     val contextSummaryUpdatedAt: Long = 0,
     val messages: List<AgentMessage> = emptyList(),
+    val branches: List<AgentBranch> = emptyList(),
+    val activeBranchId: String? = null,
 )
 
 data class AgentState(
@@ -92,3 +122,4 @@ data class AgentDraft(
 
 const val DEFAULT_RECENT_MESSAGES_N = 12
 const val DEFAULT_SUMMARIZE_EVERY_K = 10
+const val DEFAULT_SLIDING_WINDOW_SIZE = 20

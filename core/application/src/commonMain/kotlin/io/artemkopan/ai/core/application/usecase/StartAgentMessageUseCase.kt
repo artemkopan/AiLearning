@@ -3,6 +3,7 @@ package io.artemkopan.ai.core.application.usecase
 import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.model.SendAgentMessageCommand
+import io.artemkopan.ai.core.application.usecase.context.ExtractAndPersistFactsUseCase
 import io.artemkopan.ai.core.application.usecase.context.PrepareAgentContextUseCase
 import io.artemkopan.ai.core.application.usecase.shortcut.ExpandStatsShortcutsInPromptUseCase
 import io.artemkopan.ai.core.domain.model.*
@@ -23,6 +24,7 @@ class StartAgentMessageUseCase(
     private val retrieveRelevantContextUseCase: RetrieveRelevantContextUseCase,
     private val indexMessageEmbeddingsUseCase: IndexMessageEmbeddingsUseCase,
     private val expandStatsShortcutsInPromptUseCase: ExpandStatsShortcutsInPromptUseCase,
+    private val extractAndPersistFactsUseCase: ExtractAndPersistFactsUseCase,
 ) {
     suspend fun execute(userId: String, command: SendAgentMessageCommand): Result<StartedAgentMessage> {
         val domainUserId = parseUserIdOrError(userId).getOrElse { return Result.failure(it) }
@@ -65,6 +67,16 @@ class StartAgentMessageUseCase(
 
         val latestAgent = afterUser.agents.firstOrNull { it.id == agentId } ?: agent
         val persistedUserMessage = latestAgent.messages.firstOrNull { it.id == userMessage.id } ?: userMessage
+
+        if (latestAgent.contextConfig is StickyFactsAgentContextConfig) {
+            extractAndPersistFactsUseCase.execute(
+                userId = domainUserId,
+                agentId = agentId,
+                agentModel = latestAgent.model,
+                newUserMessage = persistedUserMessage.text,
+            ).getOrElse { return Result.failure(it) }
+        }
+
         val preparedContext = prepareAgentContextUseCase.execute(domainUserId, latestAgent).getOrElse {
             return Result.failure(it)
         }

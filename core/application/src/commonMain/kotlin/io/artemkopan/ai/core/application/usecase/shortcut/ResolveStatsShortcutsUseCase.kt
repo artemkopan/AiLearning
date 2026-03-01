@@ -13,7 +13,9 @@ class ResolveStatsShortcutsUseCase(
         if (tokens.isEmpty()) return Result.success(emptyMap())
         val stats = getAgentStatsUseCase.execute(userId.value).getOrElse { return Result.failure(it) }
         val statsByAgentId = stats.associateBy { it.agentId }
-        val unknown = tokens.mapNotNull { token ->
+
+        val perAgentTokens = tokens.filter { !it.allAgents }
+        val unknown = perAgentTokens.mapNotNull { token ->
             if (statsByAgentId.containsKey(token.agentId)) null else token.raw
         }
         if (unknown.isNotEmpty()) {
@@ -22,9 +24,18 @@ class ResolveStatsShortcutsUseCase(
             )
         }
 
-        val resolved = tokens.associate { token ->
-            val snippet = buildAgentStatsSnippetUseCase.execute(checkNotNull(statsByAgentId[token.agentId]))
-            token.raw to snippet
+        val resolved = mutableMapOf<String, String>()
+        for (token in tokens) {
+            if (token.allAgents) {
+                val combined = stats.joinToString(separator = "\n---\n") { agentStats ->
+                    buildAgentStatsSnippetUseCase.execute(agentStats)
+                }
+                resolved[token.raw] = combined
+            } else {
+                resolved[token.raw] = buildAgentStatsSnippetUseCase.execute(
+                    checkNotNull(statsByAgentId[token.agentId])
+                )
+            }
         }
         return Result.success(resolved)
     }

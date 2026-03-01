@@ -1,7 +1,6 @@
 package io.artemkopan.ai.core.application.usecase.stats
 
-import io.artemkopan.ai.core.domain.model.FullHistoryAgentContextConfig
-import io.artemkopan.ai.core.domain.model.RollingSummaryAgentContextConfig
+import io.artemkopan.ai.core.domain.model.*
 
 class BuildAgentStatsSnippetUseCase {
     fun execute(stats: AgentStats): String {
@@ -10,6 +9,9 @@ class BuildAgentStatsSnippetUseCase {
             is RollingSummaryAgentContextConfig -> {
                 "rolling_summary_recent_n(recentN=${config.recentMessagesN}, summarizeEveryK=${config.summarizeEveryK})"
             }
+            is SlidingWindowAgentContextConfig -> "sliding_window(windowSize=${config.windowSize})"
+            is StickyFactsAgentContextConfig -> "sticky_facts(recentN=${config.recentMessagesN})"
+            is BranchingAgentContextConfig -> "branching(recentN=${config.recentMessagesN})"
         }
         val latest = stats.latestAssistant
         val recentTurns = stats.recentTurns.joinToString(separator = "\n") { turn ->

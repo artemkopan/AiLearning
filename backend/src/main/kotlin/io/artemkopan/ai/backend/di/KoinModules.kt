@@ -126,7 +126,28 @@ val applicationModule = module {
             summaryModelOverride = config.contextSummaryModel,
         )
     }
-    single { ContextPreparationStrategyRegistry(fullHistoryStrategy = get(), rollingSummaryStrategy = get()) }
+    single { SlidingWindowContextPreparationStrategy() }
+    single { StickyFactsContextPreparationStrategy(repository = get()) }
+    single { BranchingContextPreparationStrategy() }
+    single { BuildFactsExtractionPromptUseCase() }
+    single {
+        val config = get<AppConfig>()
+        ExtractAndPersistFactsUseCase(
+            repository = get(),
+            generateTextUseCase = get(),
+            buildFactsExtractionPromptUseCase = get(),
+            factsModelOverride = config.contextSummaryModel,
+        )
+    }
+    single {
+        ContextPreparationStrategyRegistry(
+            fullHistoryStrategy = get(),
+            rollingSummaryStrategy = get(),
+            slidingWindowStrategy = get(),
+            stickyFactsStrategy = get(),
+            branchingStrategy = get(),
+        )
+    }
     single { PrepareAgentContextUseCase(strategyRegistry = get()) }
     single {
         val config = get<AppConfig>()
@@ -169,6 +190,7 @@ val applicationModule = module {
             retrieveRelevantContextUseCase = get(),
             indexMessageEmbeddingsUseCase = get(),
             expandStatsShortcutsInPromptUseCase = get(),
+            extractAndPersistFactsUseCase = get(),
         )
     }
     single {
