@@ -5,6 +5,7 @@ import io.artemkopan.ai.backend.agent.ws.AgentWsMessageHandler
 import io.artemkopan.ai.backend.agent.ws.AgentWsSessionRegistry
 import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.backend.di.appModules
+import io.artemkopan.ai.backend.provider.LlmModelCatalog
 import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.usecase.*
@@ -41,14 +42,16 @@ fun Application.module(
 ) {
     val logger = log
     logger.info(
-        "Application config: port={}, geminiModel={}, corsOrigin={}, dbHost={}, dbPort={}, dbName={}, geminiApiKeyPresent={}",
+        "Application config: port={}, defaultModel={}, deepseekBaseUrl={}, apiKeySource={}, corsOrigin={}, dbHost={}, dbPort={}, dbName={}, activeApiKeyPresent={}",
         config.port,
         config.defaultModel,
+        config.deepseekBaseUrl,
+        config.activeProviderApiKeySource,
         config.corsOrigin,
         config.dbHost,
         config.dbPort,
         config.dbName,
-        config.geminiApiKey.isNotBlank(),
+        config.activeProviderApiKey.isNotBlank(),
     )
 
     install(Koin) {
@@ -68,6 +71,7 @@ fun Application.module(
     val failAgentMessageUseCase by inject<FailAgentMessageUseCase>()
     val stopAgentMessageUseCase by inject<StopAgentMessageUseCase>()
     val getAgentStatsUseCase by inject<GetAgentStatsUseCase>()
+    val modelCatalog by inject<LlmModelCatalog>()
     val injectedLlmRepository by inject<LlmRepository>()
     val llmRepository = llmRepositoryOverride ?: injectedLlmRepository
     val statsMapper = AgentStatsHttpMapper()
@@ -144,6 +148,7 @@ fun Application.module(
         get("/api/v1/config") {
             val models = resolveConfiguredModels(
                 repository = llmRepository,
+                modelCatalog = modelCatalog,
                 fallbackContextWindowTokens = config.defaultContextWindowTokens,
                 logger = logger,
             )
@@ -276,10 +281,11 @@ fun Application.module(
 
 private suspend fun resolveConfiguredModels(
     repository: LlmRepository,
+    modelCatalog: LlmModelCatalog,
     fallbackContextWindowTokens: Int,
     logger: org.slf4j.Logger,
 ): List<ModelOptionDto> = coroutineScope {
-    curatedGeminiModels(fallbackContextWindowTokens)
+    modelCatalog.curatedModels(fallbackContextWindowTokens)
         .map { option ->
             async {
                 val resolvedContextWindow = repository.getModelMetadata(option.id)
@@ -298,33 +304,6 @@ private suspend fun resolveConfiguredModels(
         }
         .awaitAll()
 }
-
-private fun curatedGeminiModels(fallbackContextWindowTokens: Int): List<ModelOptionDto> = listOf(
-    ModelOptionDto(
-        id = "gemini-3-flash-preview",
-        name = "Gemini 3 Flash Preview",
-        provider = "gemini",
-        contextWindowTokens = fallbackContextWindowTokens,
-    ),
-    ModelOptionDto(
-        id = "gemini-2.5-flash",
-        name = "Gemini 2.5 Flash",
-        provider = "gemini",
-        contextWindowTokens = fallbackContextWindowTokens,
-    ),
-    ModelOptionDto(
-        id = "gemini-2.5-flash-lite",
-        name = "Gemini 2.5 Flash Lite",
-        provider = "gemini",
-        contextWindowTokens = fallbackContextWindowTokens,
-    ),
-    ModelOptionDto(
-        id = "gemini-flash-latest",
-        name = "Gemini Flash Latest",
-        provider = "gemini",
-        contextWindowTokens = fallbackContextWindowTokens,
-    ),
-)
 
 private fun io.ktor.server.application.ApplicationCall.ensureRequestId(): String {
     if (attributes.contains(RequestIdKey)) return attributes[RequestIdKey]

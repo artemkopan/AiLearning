@@ -2,6 +2,8 @@ package io.artemkopan.ai.backend.di
 
 import io.artemkopan.ai.backend.agent.persistence.PostgresAgentRepository
 import io.artemkopan.ai.backend.config.AppConfig
+import io.artemkopan.ai.backend.provider.DeepSeekModelCatalog
+import io.artemkopan.ai.backend.provider.LlmModelCatalog
 import io.artemkopan.ai.core.application.mapper.DomainErrorMapper
 import io.artemkopan.ai.core.application.usecase.*
 import io.artemkopan.ai.core.application.usecase.context.*
@@ -10,9 +12,9 @@ import io.artemkopan.ai.core.application.usecase.shortcut.ParseStatsShortcutToke
 import io.artemkopan.ai.core.application.usecase.shortcut.ResolveStatsShortcutsUseCase
 import io.artemkopan.ai.core.application.usecase.stats.BuildAgentStatsSnippetUseCase
 import io.artemkopan.ai.core.application.usecase.stats.GetAgentStatsUseCase
-import io.artemkopan.ai.core.data.client.GeminiNetworkClient
+import io.artemkopan.ai.core.data.client.DeepSeekNetworkClient
 import io.artemkopan.ai.core.data.client.LlmNetworkClient
-import io.artemkopan.ai.core.data.repository.GeminiLlmRepository
+import io.artemkopan.ai.core.data.repository.DefaultLlmRepository
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.core.domain.repository.LlmRepository
 import io.ktor.client.*
@@ -63,14 +65,19 @@ val networkModule = module {
 val dataModule = module {
     single<LlmNetworkClient> {
         val config = get<AppConfig>()
-        GeminiNetworkClient(
+        DeepSeekNetworkClient(
             httpClient = get(),
-            apiKey = config.geminiApiKey,
+            apiKey = config.deepseekApiKey,
+            baseUrl = config.deepseekBaseUrl,
         )
     }
 
     single<LlmRepository> {
-        GeminiLlmRepository(get())
+        DefaultLlmRepository(get())
+    }
+
+    single<LlmModelCatalog> {
+        DeepSeekModelCatalog()
     }
 
     single<AgentRepository> {

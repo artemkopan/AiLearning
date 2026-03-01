@@ -32,9 +32,10 @@ docker compose --env-file .env up --build backend
 
 ## Environment Setup
 
-Copy `.env.example` to `.env` and set `GEMINI_API_KEY`. Required variables:
-- `GEMINI_API_KEY` - Gemini API key
-- `GEMINI_MODEL` - Default model (defaults to `gemini-2.5-flash`)
+Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY`. Required variables:
+- `DEEPSEEK_API_KEY` - DeepSeek API key
+- `DEEPSEEK_MODEL` - Default model (defaults to `deepseek-chat`)
+- `DEEPSEEK_BASE_URL` - Provider base URL (defaults to `https://api.deepseek.com`)
 - `CORS_ORIGIN` - CORS origin (defaults to `http://localhost:8081`)
 
 ## Architecture
@@ -44,7 +45,7 @@ This is a Clean Architecture Kotlin Multiplatform project with clear layer separ
 ```
 core/domain     → Entities, value objects, domain errors, repository interfaces (pure Kotlin, no dependencies)
 core/application → Use cases (business logic), commands, depends only on domain
-core/data       → Repository implementations, network clients (Ktor HTTP client, Gemini API)
+core/data       → Repository implementations, network clients (Ktor HTTP client, DeepSeek API)
 shared-contract → DTOs shared between backend and frontend (kotlinx.serialization)
 shared-ui       → Compose Multiplatform UI components, state management, cyberpunk theme
 backend         → Ktor JVM server, HTTP routes, DI wiring (Koin)
@@ -59,9 +60,9 @@ web-host        → Web app entry point (JS), wires shared-ui with HTTP gateway
 - Use cases are single-responsibility classes with an `execute()` method
 - Domain errors (`DomainError`) are mapped to application errors (`AppError`) in use cases
 - Repository interfaces live in `core/domain`, implementations in `core/data`
-- `LlmNetworkClient` interface allows swapping LLM providers (currently Gemini)
+- `LlmNetworkClient` interface allows swapping LLM providers (currently DeepSeek)
 - Value objects wrap primitives in domain layer (`Prompt`, `ModelId`, `Temperature`, `MaxOutputTokens`, `StopSequences`)
-- New generation parameters flow: `DTO → Command → UseCase → GenerationOptions → LlmGenerationInput → NetworkRequest → GeminiGenerationConfig`
+- New generation parameters flow: `DTO → Command → UseCase → GenerationOptions → LlmGenerationInput → NetworkRequest → Provider Request Payload`
 - Do not use fully-qualified class names in code bodies (for example `io.artemkopan...AgentMessageRole`); add imports and use short names
 
 ### Backend DI

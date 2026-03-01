@@ -1,11 +1,11 @@
 package io.artemkopan.ai.backend
 
+import co.touchlab.kermit.Logger
 import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.backend.config.EnvSource
 import io.artemkopan.ai.backend.http.module
-import co.touchlab.kermit.Logger
-import io.ktor.server.engine.embeddedServer
-import io.ktor.server.netty.Netty
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
 import org.slf4j.LoggerFactory
 
 fun main() {
@@ -22,15 +22,17 @@ fun main() {
     Logger.withTag("Startup").i { "Logging initialized" }
     logger.info("Loaded .env files: {}", loadedFiles)
     logger.info(
-        "Loaded config: port={}, geminiModel={}, corsOrigin={}, dbHost={}, dbPort={}, dbName={}, dbUser={}, geminiApiKey={}",
+        "Loaded config: port={}, defaultModel={}, deepseekBaseUrl={}, apiKeySource={}, corsOrigin={}, dbHost={}, dbPort={}, dbName={}, dbUser={}, activeApiKey={}",
         config.port,
         config.defaultModel,
+        config.deepseekBaseUrl,
+        config.activeProviderApiKeySource,
         config.corsOrigin,
         config.dbHost,
         config.dbPort,
         config.dbName,
         config.dbUser,
-        maskSecret(config.geminiApiKey),
+        maskSecret(config.activeProviderApiKey),
     )
 
     try {

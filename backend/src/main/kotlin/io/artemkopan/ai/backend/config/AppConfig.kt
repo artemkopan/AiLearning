@@ -2,9 +2,11 @@ package io.artemkopan.ai.backend.config
 
 data class AppConfig(
     val port: Int,
-    val geminiApiKey: String,
+    val deepseekApiKey: String,
+    val geminiFallbackApiKey: String = "",
     val defaultModel: String,
-    val defaultContextWindowTokens: Int = 1_000_000,
+    val deepseekBaseUrl: String = DEFAULT_DEEPSEEK_BASE_URL,
+    val defaultContextWindowTokens: Int = DEFAULT_CONTEXT_WINDOW_TOKENS,
     val corsOrigin: String,
     val contextSummaryTriggerTokens: Int = 3_000,
     val contextRecentMaxMessages: Int = 12,
@@ -12,7 +14,7 @@ data class AppConfig(
     val contextSummaryMaxOutputTokens: Int = 300,
     val contextSummaryModel: String? = null,
     val contextEmbeddingEnabled: Boolean = false,
-    val contextEmbeddingModel: String = "gemini-embedding-001",
+    val contextEmbeddingModel: String = "deepseek-embedding-unsupported",
     val contextEmbeddingChunkChars: Int = 1_200,
     val contextRetrievalTopK: Int = 6,
     val contextRetrievalMinScore: Double = 0.55,
@@ -23,12 +25,77 @@ data class AppConfig(
     val dbPassword: String,
     val dbSsl: Boolean,
 ) {
+    val activeProviderApiKey: String
+        get() = deepseekApiKey.ifBlank { geminiFallbackApiKey }
+
+    val activeProviderApiKeySource: String
+        get() = when {
+            deepseekApiKey.isNotBlank() -> "deepseek"
+            geminiFallbackApiKey.isNotBlank() -> "gemini_fallback"
+            else -> "missing"
+        }
+
     val jdbcUrl: String
         get() = "jdbc:postgresql://$dbHost:$dbPort/$dbName?ssl=$dbSsl"
 
+    @Deprecated(
+        message = "Use deepseekApiKey/geminiFallbackApiKey in primary constructor.",
+        replaceWith = ReplaceWith(
+            "AppConfig(port, deepseekApiKey = \"\", geminiFallbackApiKey = geminiApiKey, defaultModel, deepseekBaseUrl, defaultContextWindowTokens, corsOrigin, contextSummaryTriggerTokens, contextRecentMaxMessages, contextSummarizeEveryMessages, contextSummaryMaxOutputTokens, contextSummaryModel, contextEmbeddingEnabled, contextEmbeddingModel, contextEmbeddingChunkChars, contextRetrievalTopK, contextRetrievalMinScore, dbHost, dbPort, dbName, dbUser, dbPassword, dbSsl)"
+        )
+    )
+    constructor(
+        port: Int,
+        geminiApiKey: String,
+        defaultModel: String,
+        defaultContextWindowTokens: Int = DEFAULT_CONTEXT_WINDOW_TOKENS,
+        corsOrigin: String,
+        contextSummaryTriggerTokens: Int = 3_000,
+        contextRecentMaxMessages: Int = 12,
+        contextSummarizeEveryMessages: Int = 10,
+        contextSummaryMaxOutputTokens: Int = 300,
+        contextSummaryModel: String? = null,
+        contextEmbeddingEnabled: Boolean = false,
+        contextEmbeddingModel: String = "gemini-embedding-001",
+        contextEmbeddingChunkChars: Int = 1_200,
+        contextRetrievalTopK: Int = 6,
+        contextRetrievalMinScore: Double = 0.55,
+        dbHost: String,
+        dbPort: Int,
+        dbName: String,
+        dbUser: String,
+        dbPassword: String,
+        dbSsl: Boolean,
+    ) : this(
+        port = port,
+        deepseekApiKey = "",
+        geminiFallbackApiKey = geminiApiKey,
+        defaultModel = defaultModel,
+        deepseekBaseUrl = DEFAULT_DEEPSEEK_BASE_URL,
+        defaultContextWindowTokens = defaultContextWindowTokens,
+        corsOrigin = corsOrigin,
+        contextSummaryTriggerTokens = contextSummaryTriggerTokens,
+        contextRecentMaxMessages = contextRecentMaxMessages,
+        contextSummarizeEveryMessages = contextSummarizeEveryMessages,
+        contextSummaryMaxOutputTokens = contextSummaryMaxOutputTokens,
+        contextSummaryModel = contextSummaryModel,
+        contextEmbeddingEnabled = contextEmbeddingEnabled,
+        contextEmbeddingModel = contextEmbeddingModel,
+        contextEmbeddingChunkChars = contextEmbeddingChunkChars,
+        contextRetrievalTopK = contextRetrievalTopK,
+        contextRetrievalMinScore = contextRetrievalMinScore,
+        dbHost = dbHost,
+        dbPort = dbPort,
+        dbName = dbName,
+        dbUser = dbUser,
+        dbPassword = dbPassword,
+        dbSsl = dbSsl,
+    )
+
     fun validate() {
-        require(geminiApiKey.isNotBlank()) {
-            "GEMINI_API_KEY is required but was not provided. Please set it in your .env file or environment variables."
+        require(activeProviderApiKey.isNotBlank()) {
+            "DEEPSEEK_API_KEY is required but was not provided. " +
+                "Legacy fallback GEMINI_API_KEY is also supported."
         }
         require(defaultContextWindowTokens > 0) {
             "DEFAULT_CONTEXT_WINDOW_TOKENS must be greater than 0."
@@ -45,13 +112,9 @@ data class AppConfig(
         require(contextSummaryMaxOutputTokens > 0) {
             "CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS must be greater than 0."
         }
-        if (contextEmbeddingEnabled) {
-            require(contextEmbeddingModel.isNotBlank()) {
-                "CONTEXT_EMBEDDING_MODEL must not be blank."
-            }
-            require(contextEmbeddingChunkChars > 0) {
-                "CONTEXT_EMBEDDING_CHUNK_CHARS must be greater than 0."
-            }
+        require(!contextEmbeddingEnabled) {
+            "Embeddings are currently unsupported with the DeepSeek provider. " +
+                "Set CONTEXT_EMBEDDING_ENABLED=false."
         }
         require(contextRetrievalTopK > 0) {
             "CONTEXT_RETRIEVAL_TOP_K must be greater than 0."
@@ -62,13 +125,26 @@ data class AppConfig(
     }
 
     companion object {
+        private const val DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+        private const val DEFAULT_MODEL = "deepseek-chat"
+        private const val DEFAULT_CONTEXT_WINDOW_TOKENS = 64_000
+
         fun fromEnv(env: Map<String, String> = EnvSource.load()): AppConfig {
+            val resolvedModel = env["DEEPSEEK_MODEL"].orEmpty()
+                .ifBlank { env["GEMINI_MODEL"].orEmpty() }
+                .ifBlank { DEFAULT_MODEL }
+                .let { model ->
+                    if (model.trim().lowercase().startsWith("gemini")) DEFAULT_MODEL else model
+                }
+
             return AppConfig(
                 port = env["PORT"]?.toIntOrNull() ?: 8080,
-                geminiApiKey = env["GEMINI_API_KEY"].orEmpty(),
-                defaultModel = env["GEMINI_MODEL"].orEmpty().ifBlank { "gemini-2.5-flash" },
+                deepseekApiKey = env["DEEPSEEK_API_KEY"].orEmpty(),
+                geminiFallbackApiKey = env["GEMINI_API_KEY"].orEmpty(),
+                defaultModel = resolvedModel,
+                deepseekBaseUrl = env["DEEPSEEK_BASE_URL"].orEmpty().ifBlank { DEFAULT_DEEPSEEK_BASE_URL },
                 defaultContextWindowTokens = env["DEFAULT_CONTEXT_WINDOW_TOKENS"]?.toIntOrNull()
-                    ?: 1_000_000,
+                    ?: DEFAULT_CONTEXT_WINDOW_TOKENS,
                 corsOrigin = env["CORS_ORIGIN"].orEmpty()
                     .removePrefix("http://")
                     .removePrefix("https://")
@@ -83,7 +159,8 @@ data class AppConfig(
                     ?: 300,
                 contextSummaryModel = env["CONTEXT_SUMMARY_MODEL"]?.trim()?.takeIf { it.isNotEmpty() },
                 contextEmbeddingEnabled = env["CONTEXT_EMBEDDING_ENABLED"]?.toBooleanStrictOrNull() ?: false,
-                contextEmbeddingModel = env["CONTEXT_EMBEDDING_MODEL"].orEmpty().ifBlank { "gemini-embedding-001" },
+                contextEmbeddingModel = env["CONTEXT_EMBEDDING_MODEL"].orEmpty()
+                    .ifBlank { "deepseek-embedding-unsupported" },
                 contextEmbeddingChunkChars = env["CONTEXT_EMBEDDING_CHUNK_CHARS"]?.toIntOrNull() ?: 1_200,
                 contextRetrievalTopK = env["CONTEXT_RETRIEVAL_TOP_K"]?.toIntOrNull() ?: 6,
                 contextRetrievalMinScore = env["CONTEXT_RETRIEVAL_MIN_SCORE"]?.toDoubleOrNull() ?: 0.55,

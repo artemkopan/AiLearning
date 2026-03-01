@@ -24,7 +24,8 @@ Copy `.env.example` and set values:
 
 ```bash
 cp .env.example .env
-# set GEMINI_API_KEY and DB_* values in .env
+# set DEEPSEEK_API_KEY and DB_* values in .env
+# legacy GEMINI_* fallback env vars are also supported
 ```
 
 ## Run backend (Docker)
@@ -55,7 +56,7 @@ Request example:
 ```json
 {
   "prompt": "Write a short Kotlin tip",
-  "model": "gemini-2.5-flash",
+  "model": "deepseek-chat",
   "temperature": 0.7
 }
 ```
@@ -65,4 +66,6 @@ Request example:
 - Agents are persisted in PostgreSQL and synchronized to frontend via WebSocket snapshots.
 - Generation endpoint remains available over HTTP for compatibility.
 - Frontend shows validation and backend failures in an error popup.
-- Current provider implementation is Gemini and can be replaced by adding another `LlmNetworkClient` + repository wiring.
+- Active provider implementation is DeepSeek via `LlmNetworkClient` abstraction.
+- Legacy env fallback is supported: if `DEEPSEEK_*` is absent, backend will read `GEMINI_*`.
+- Embeddings are currently unsupported in the DeepSeek migration path (`CONTEXT_EMBEDDING_ENABLED=false`).
