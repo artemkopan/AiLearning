@@ -9,6 +9,7 @@ import io.artemkopan.ai.core.domain.repository.LlmRepository
 class IndexMessageEmbeddingsUseCase(
     private val repository: AgentRepository,
     private val llmRepository: LlmRepository,
+    private val enabled: Boolean = true,
     private val embeddingModel: String,
     private val chunkSizeChars: Int = 1_200,
 ) {
@@ -19,6 +20,8 @@ class IndexMessageEmbeddingsUseCase(
         text: String,
         createdAt: Long,
     ): Result<Unit> {
+        if (!enabled) return Result.success(Unit)
+
         val normalized = text.trim()
         if (normalized.isEmpty()) return Result.success(Unit)
         val normalizedCreatedAt = createdAt.takeIf { it > 0 } ?: System.currentTimeMillis()

@@ -5,11 +5,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,12 +15,13 @@ import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 @Composable
 fun SubmitButton(
     isLoading: Boolean,
+    queuedCount: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val showBusyState = isLoading || queuedCount > 0
     Button(
         onClick = onClick,
-        enabled = !isLoading,
         modifier = modifier.height(44.dp),
         shape = RoundedCornerShape(2.dp),
         colors = ButtonDefaults.buttonColors(
@@ -34,7 +31,7 @@ fun SubmitButton(
             disabledContentColor = Color.White.copy(alpha = 0.5f),
         ),
     ) {
-        if (isLoading) {
+        if (showBusyState) {
             CircularProgressIndicator(
                 modifier = Modifier.size(16.dp),
                 strokeWidth = 2.dp,
@@ -42,7 +39,10 @@ fun SubmitButton(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                "PROCESSING...",
+                when {
+                    queuedCount > 0 -> "QUEUE ($queuedCount)"
+                    else -> "PROCESSING..."
+                },
                 style = MaterialTheme.typography.labelLarge,
             )
         } else {

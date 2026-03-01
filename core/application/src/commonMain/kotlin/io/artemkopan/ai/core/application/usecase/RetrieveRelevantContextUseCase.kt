@@ -9,6 +9,7 @@ import io.artemkopan.ai.core.domain.repository.LlmRepository
 class RetrieveRelevantContextUseCase(
     private val repository: AgentRepository,
     private val llmRepository: LlmRepository,
+    private val enabled: Boolean = true,
     private val embeddingModel: String,
     private val topK: Int,
     private val minScore: Double,
@@ -18,6 +19,8 @@ class RetrieveRelevantContextUseCase(
         agentId: AgentId,
         queryText: String,
     ): Result<List<RetrievedContextChunk>> {
+        if (!enabled) return Result.success(emptyList())
+
         val normalized = queryText.trim()
         if (normalized.isEmpty()) return Result.success(emptyList())
 

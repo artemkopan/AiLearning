@@ -1,12 +1,10 @@
 package io.artemkopan.ai.backend.di
 
 import io.artemkopan.ai.backend.config.AppConfig
-import io.artemkopan.ai.core.data.client.LlmNetworkClient
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.core.domain.repository.LlmRepository
-import io.ktor.client.HttpClient
-import io.ktor.client.HttpClientConfig
-import io.ktor.client.engine.HttpClientEngine
+import io.ktor.client.*
+import io.ktor.client.engine.*
 import kotlinx.serialization.json.Json
 import org.koin.core.annotation.KoinExperimentalAPI
 import org.koin.dsl.koinApplication
@@ -58,6 +56,7 @@ class KoinModulesVerifyTest {
                 AppConfig::class,
                 LlmRepository::class,
                 AgentRepository::class,
+                Boolean::class,
             )
         )
     }

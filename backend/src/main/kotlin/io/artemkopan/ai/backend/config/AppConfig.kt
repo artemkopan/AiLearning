@@ -11,6 +11,7 @@ data class AppConfig(
     val contextSummarizeEveryMessages: Int = 10,
     val contextSummaryMaxOutputTokens: Int = 300,
     val contextSummaryModel: String? = null,
+    val contextEmbeddingEnabled: Boolean = false,
     val contextEmbeddingModel: String = "gemini-embedding-001",
     val contextEmbeddingChunkChars: Int = 1_200,
     val contextRetrievalTopK: Int = 6,
@@ -44,11 +45,13 @@ data class AppConfig(
         require(contextSummaryMaxOutputTokens > 0) {
             "CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS must be greater than 0."
         }
-        require(contextEmbeddingModel.isNotBlank()) {
-            "CONTEXT_EMBEDDING_MODEL must not be blank."
-        }
-        require(contextEmbeddingChunkChars > 0) {
-            "CONTEXT_EMBEDDING_CHUNK_CHARS must be greater than 0."
+        if (contextEmbeddingEnabled) {
+            require(contextEmbeddingModel.isNotBlank()) {
+                "CONTEXT_EMBEDDING_MODEL must not be blank."
+            }
+            require(contextEmbeddingChunkChars > 0) {
+                "CONTEXT_EMBEDDING_CHUNK_CHARS must be greater than 0."
+            }
         }
         require(contextRetrievalTopK > 0) {
             "CONTEXT_RETRIEVAL_TOP_K must be greater than 0."
@@ -79,6 +82,7 @@ data class AppConfig(
                 contextSummaryMaxOutputTokens = env["CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS"]?.toIntOrNull()
                     ?: 300,
                 contextSummaryModel = env["CONTEXT_SUMMARY_MODEL"]?.trim()?.takeIf { it.isNotEmpty() },
+                contextEmbeddingEnabled = env["CONTEXT_EMBEDDING_ENABLED"]?.toBooleanStrictOrNull() ?: false,
                 contextEmbeddingModel = env["CONTEXT_EMBEDDING_MODEL"].orEmpty().ifBlank { "gemini-embedding-001" },
                 contextEmbeddingChunkChars = env["CONTEXT_EMBEDDING_CHUNK_CHARS"]?.toIntOrNull() ?: 1_200,
                 contextRetrievalTopK = env["CONTEXT_RETRIEVAL_TOP_K"]?.toIntOrNull() ?: 6,

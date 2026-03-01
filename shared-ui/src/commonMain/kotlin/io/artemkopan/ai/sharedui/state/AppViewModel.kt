@@ -6,8 +6,8 @@ import co.touchlab.kermit.Logger
 import io.artemkopan.ai.sharedcontract.*
 import io.artemkopan.ai.sharedui.gateway.AgentGateway
 import io.artemkopan.ai.sharedui.usecase.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 
 data class UsageResult(
     val inputTokens: Int,
@@ -42,6 +42,28 @@ data class ErrorPopupState(
 
 data class AgentId(val value: String)
 
+enum class QueuedMessageStatus {
+    QUEUED,
+    SENDING,
+}
+
+data class QueuedDraftSnapshot(
+    val model: String,
+    val maxOutputTokens: String,
+    val temperature: String,
+    val stopSequences: String,
+    val agentMode: AgentMode,
+    val contextConfig: AgentContextConfigDto,
+)
+
+data class QueuedMessageState(
+    val id: String,
+    val text: String,
+    val status: QueuedMessageStatus,
+    val createdAt: Long,
+    val draftSnapshot: QueuedDraftSnapshot,
+)
+
 data class AgentState(
     val id: AgentId,
     val title: String,
@@ -70,6 +92,7 @@ data class UiState(
     val agentConfig: AgentConfigDto? = null,
     val contextTotalTokensByAgent: Map<AgentId, String> = emptyMap(),
     val contextLeftByAgent: Map<AgentId, String> = emptyMap(),
+    val queuedByAgent: Map<AgentId, List<QueuedMessageState>> = emptyMap(),
     val isConnected: Boolean = false,
 )
 
@@ -85,7 +108,7 @@ sealed interface UiAction {
     data class ContextSummarizeEveryChanged(val value: String) : UiAction
     data class InsertSlashToken(val value: String) : UiAction
     data object Submit : UiAction
-    data class StopMessage(val messageId: String) : UiAction
+    data object StopQueue : UiAction
     data object DismissError : UiAction
     data object CreateAgent : UiAction
     data class SelectAgent(val agentId: AgentId) : UiAction
@@ -105,6 +128,9 @@ class AppViewModel(
 
     private val log = Logger.withTag("AppViewModel")
     private val _state = MutableStateFlow(UiState())
+    private val drainJobsByAgent = mutableMapOf<AgentId, Job>()
+    private var queuedMessageCounter: Long = 0
+    private var queuedMessageCreatedAtCounter: Long = 0
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     init {
@@ -128,7 +154,7 @@ class AppViewModel(
             is UiAction.ContextSummarizeEveryChanged -> handleContextSummarizeEveryChanged(action.value)
             is UiAction.InsertSlashToken -> handleInsertSlashToken(action.value)
             is UiAction.Submit -> handleSubmit()
-            is UiAction.StopMessage -> handleStopMessage(action.messageId)
+            is UiAction.StopQueue -> handleStopQueue()
             is UiAction.DismissError -> handleDismissError()
             is UiAction.CreateAgent -> sendCommand { CreateAgentCommandDto() }
             is UiAction.SelectAgent -> sendCommand { SelectAgentCommandDto(agentId = action.agentId.value) }
@@ -156,6 +182,7 @@ class AppViewModel(
                 .onSuccess {
                     updateState { it.copy(isConnected = true) }
                     sendCommand { SubscribeAgentsDto() }
+                    triggerDrainForQueuedAgents()
                 }
                 .onFailure { throwable ->
                     log.e(throwable) { "Failed to connect WebSocket" }
@@ -291,22 +318,44 @@ class AppViewModel(
             return
         }
 
-        sendCommand {
-            SendAgentMessageCommandDto(
-                agentId = active.id.value,
-                text = text,
+        val queuedMessage = QueuedMessageState(
+            id = nextQueuedMessageId(),
+            text = text,
+            status = QueuedMessageStatus.QUEUED,
+            createdAt = nextQueuedMessageCreatedAt(),
+            draftSnapshot = QueuedDraftSnapshot(
+                model = active.model,
+                maxOutputTokens = active.maxOutputTokens,
+                temperature = active.temperature,
+                stopSequences = active.stopSequences,
+                agentMode = active.agentMode,
+                contextConfig = active.contextConfig,
+            ),
+        )
+
+        updateState { current ->
+            current.copy(
+                queuedByAgent = current.queuedByAgent.append(active.id, queuedMessage)
             )
         }
-
         updateActiveAgent { it.copy(draftMessage = "") }
+        triggerQueueDrain(active.id)
     }
 
-    private fun handleStopMessage(messageId: String) {
+    private fun handleStopQueue() {
         val active = getActiveAgent() ?: return
+        clearQueuedMessages(active.id)
+        drainJobsByAgent.remove(active.id)?.cancel()
+
+        val processingMessage = active.messages.firstOrNull {
+            it.role == AgentMessageRoleDto.ASSISTANT &&
+                it.status.equals(STATUS_PROCESSING, ignoreCase = true)
+        } ?: return
+
         sendCommand {
             StopAgentMessageCommandDto(
                 agentId = active.id.value,
-                messageId = messageId,
+                messageId = processingMessage.id,
             )
         }
     }
@@ -323,14 +372,19 @@ class AppViewModel(
         )
 
         updateState {
+            val prunedQueue = it.queuedByAgent.filterKeys { id -> mapped.agents.containsKey(id) }
             it.copy(
                 agents = mapped.agents,
                 agentOrder = mapped.agentOrder,
                 activeAgentId = mapped.activeAgentId,
                 errorPopup = null,
+                queuedByAgent = prunedQueue,
             )
         }
+
+        cancelDrainsForMissingAgents(mapped.agents.keys)
         mapped.draftUpdates.forEach(::sendDraftUpdate)
+        triggerDrainForQueuedAgents()
     }
 
     private fun sendActiveDraftUpdate() {
@@ -376,6 +430,150 @@ class AppViewModel(
                     )
                 }
         }
+    }
+
+    private fun triggerQueueDrain(agentId: AgentId) {
+        if (_state.value.queuedByAgent[agentId].isNullOrEmpty()) return
+        if (drainJobsByAgent[agentId]?.isActive == true) return
+
+        val job = viewModelScope.launch {
+            drainQueue(agentId)
+        }
+        drainJobsByAgent[agentId] = job
+        job.invokeOnCompletion {
+            drainJobsByAgent.remove(agentId)
+        }
+    }
+
+    private fun triggerDrainForQueuedAgents() {
+        _state.value.queuedByAgent.keys.forEach(::triggerQueueDrain)
+    }
+
+    private suspend fun drainQueue(agentId: AgentId) {
+        while (currentCoroutineContext().isActive) {
+            val queued = _state.value.queuedByAgent[agentId].orEmpty().firstOrNull() ?: return
+            waitUntilAgentReady(agentId) ?: return
+            updateQueuedStatus(agentId, queued.id, QueuedMessageStatus.SENDING)
+            sendQueuedMessage(agentId, queued)
+                .onSuccess {
+                    removeQueuedMessage(agentId, queued.id)
+                    waitForProcessingCycle(agentId)
+                }
+                .onFailure { throwable ->
+                    removeQueuedMessage(agentId, queued.id)
+                    showError(
+                        title = "Request Failed",
+                        message = throwable.message ?: "Failed to send queued message.",
+                    )
+                }
+        }
+    }
+
+    private suspend fun waitUntilAgentReady(agentId: AgentId): AgentState? {
+        return state
+            .map { uiState ->
+                val agent = uiState.agents[agentId]
+                if (uiState.isConnected && agent != null && !agent.isLoading) {
+                    agent
+                } else {
+                    null
+                }
+            }
+            .distinctUntilChanged()
+            .filterNotNull()
+            .first()
+    }
+
+    private suspend fun waitForProcessingCycle(agentId: AgentId) {
+        val enteredProcessing = withTimeoutOrNull(5_000L) {
+            state
+                .map { uiState ->
+                    val agent = uiState.agents[agentId]
+                    uiState.isConnected && agent != null && agent.isLoading
+                }
+                .distinctUntilChanged()
+                .first { it }
+        } ?: false
+
+        if (enteredProcessing) {
+            waitUntilAgentReady(agentId)
+        }
+    }
+
+    private suspend fun sendQueuedMessage(agentId: AgentId, queued: QueuedMessageState): Result<Unit> {
+        val snapshot = queued.draftSnapshot
+        val updateDraftResult = gateway.send(
+            UpdateAgentDraftCommandDto(
+                agentId = agentId.value,
+                model = snapshot.model,
+                maxOutputTokens = snapshot.maxOutputTokens,
+                temperature = snapshot.temperature,
+                stopSequences = snapshot.stopSequences,
+                agentMode = snapshot.agentMode,
+                contextConfig = snapshot.contextConfig,
+            )
+        )
+        if (updateDraftResult.isFailure) return updateDraftResult
+
+        return gateway.send(
+            SendAgentMessageCommandDto(
+                agentId = agentId.value,
+                text = queued.text,
+            )
+        )
+    }
+
+    private fun updateQueuedStatus(agentId: AgentId, queuedId: String, status: QueuedMessageStatus) {
+        updateState { current ->
+            val queue = current.queuedByAgent[agentId].orEmpty()
+            if (queue.isEmpty()) return@updateState current
+            val updatedQueue = queue.map { queued ->
+                if (queued.id == queuedId) queued.copy(status = status) else queued
+            }
+            current.copy(
+                queuedByAgent = current.queuedByAgent + (agentId to updatedQueue)
+            )
+        }
+    }
+
+    private fun removeQueuedMessage(agentId: AgentId, queuedId: String) {
+        updateState { current ->
+            val queue = current.queuedByAgent[agentId].orEmpty()
+            if (queue.isEmpty()) return@updateState current
+            val updatedQueue = queue.filterNot { queued -> queued.id == queuedId }
+            val updatedMap = if (updatedQueue.isEmpty()) {
+                current.queuedByAgent - agentId
+            } else {
+                current.queuedByAgent + (agentId to updatedQueue)
+            }
+            current.copy(queuedByAgent = updatedMap)
+        }
+    }
+
+    private fun clearQueuedMessages(agentId: AgentId) {
+        updateState { current ->
+            if (!current.queuedByAgent.containsKey(agentId)) return@updateState current
+            current.copy(
+                queuedByAgent = current.queuedByAgent - agentId
+            )
+        }
+    }
+
+    private fun cancelDrainsForMissingAgents(existingIds: Set<AgentId>) {
+        val missing = drainJobsByAgent.keys.filterNot { existingIds.contains(it) }
+        missing.forEach { id ->
+            drainJobsByAgent.remove(id)?.cancel()
+        }
+    }
+
+    private fun nextQueuedMessageId(): String {
+        queuedMessageCounter += 1
+        return "$LOCAL_QUEUE_MESSAGE_ID_PREFIX$queuedMessageCounter"
+    }
+
+    private fun nextQueuedMessageCreatedAt(): Long {
+        queuedMessageCreatedAtCounter += 1
+        return queuedMessageCreatedAtCounter
     }
 
     private fun observeActiveModelMetadata() {
@@ -424,10 +622,21 @@ class AppViewModel(
     }
 
     override fun onCleared() {
+        drainJobsByAgent.values.forEach { it.cancel() }
+        drainJobsByAgent.clear()
         gateway.disconnect()
         super.onCleared()
     }
 }
 
+private fun Map<AgentId, List<QueuedMessageState>>.append(
+    agentId: AgentId,
+    queuedMessage: QueuedMessageState,
+): Map<AgentId, List<QueuedMessageState>> {
+    val updated = get(agentId).orEmpty() + queuedMessage
+    return this + (agentId to updated)
+}
+
+private const val LOCAL_QUEUE_MESSAGE_ID_PREFIX = "local-queue-"
 private const val STATUS_PROCESSING = "processing"
 private const val STATUS_DONE = "done"

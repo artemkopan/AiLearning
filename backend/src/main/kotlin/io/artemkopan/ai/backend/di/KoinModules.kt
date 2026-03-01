@@ -126,6 +126,7 @@ val applicationModule = module {
         IndexMessageEmbeddingsUseCase(
             repository = get(),
             llmRepository = get(),
+            enabled = config.contextEmbeddingEnabled,
             embeddingModel = config.contextEmbeddingModel,
             chunkSizeChars = config.contextEmbeddingChunkChars,
         )
@@ -135,6 +136,7 @@ val applicationModule = module {
         RetrieveRelevantContextUseCase(
             repository = get(),
             llmRepository = get(),
+            enabled = config.contextEmbeddingEnabled,
             embeddingModel = config.contextEmbeddingModel,
             topK = config.contextRetrievalTopK,
             minScore = config.contextRetrievalMinScore,

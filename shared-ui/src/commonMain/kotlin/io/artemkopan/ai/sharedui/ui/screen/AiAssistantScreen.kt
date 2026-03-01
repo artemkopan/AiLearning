@@ -112,6 +112,7 @@ private fun AiAssistantContent(
                         CenterConversationColumn(
                             agent = activeAgent,
                             allAgents = orderedAgents,
+                            queuedMessages = state.queuedByAgent[activeAgent.id].orEmpty(),
                             onAction = onAction,
                             modifier = Modifier
                                 .weight(1f)
@@ -164,15 +165,21 @@ private fun ScreenHeader() {
 private fun CenterConversationColumn(
     agent: AgentState,
     allAgents: List<AgentState>,
+    queuedMessages: List<QueuedMessageState>,
     onAction: (UiAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val displayMessages = remember(agent.messages, queuedMessages) {
+        agent.messages + queuedMessages.map { it.asDisplayMessage() }
+    }
+    val queuedIds = remember(queuedMessages) { queuedMessages.map { it.id }.toSet() }
+
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val scrollState = rememberScrollState()
-        val latestMessageSignature = agent.messages.lastOrNull()?.let { message ->
+        val latestMessageSignature = displayMessages.lastOrNull()?.let { message ->
             "${message.id}:${message.status}:${message.text.length}"
         }
         LaunchedEffect(agent.id.value, latestMessageSignature) {
@@ -191,18 +198,19 @@ private fun CenterConversationColumn(
                         .padding(end = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    if (agent.messages.isEmpty()) {
+                    if (displayMessages.isEmpty()) {
                         Text(
                             text = "NO MESSAGES YET",
                             style = MaterialTheme.typography.bodySmall,
                             color = CyberpunkColors.TextMuted,
                         )
                     } else {
-                        agent.messages.forEach { message ->
+                        displayMessages.forEach { message ->
                             MessageRow(
                                 message = message,
+                                isQueuedLocal = queuedIds.contains(message.id),
                                 onStop = {
-                                    onAction(UiAction.StopMessage(message.id))
+                                    onAction(UiAction.StopQueue)
                                 },
                             )
                         }
@@ -240,12 +248,27 @@ private fun CenterConversationColumn(
 
         SubmitButton(
             isLoading = agent.isLoading,
+            queuedCount = queuedMessages.size,
             onClick = { onAction(UiAction.Submit) },
         )
 
-        if (agent.isLoading) {
+        if (queuedMessages.isNotEmpty()) {
+            Text(
+                text = "STOP QUEUE",
+                style = MaterialTheme.typography.labelMedium,
+                color = CyberpunkColors.Red,
+                modifier = Modifier.clickable { onAction(UiAction.StopQueue) },
+            )
+        }
+
+        if (agent.isLoading || queuedMessages.isNotEmpty()) {
+            val status = when {
+                agent.isLoading && queuedMessages.isNotEmpty() -> "${agent.status} / queued ${queuedMessages.size}"
+                agent.isLoading -> agent.status
+                else -> "queued ${queuedMessages.size}"
+            }
             StatusPanel(
-                status = agent.status,
+                status = status,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -255,12 +278,14 @@ private fun CenterConversationColumn(
 @Composable
 private fun MessageRow(
     message: AgentMessageState,
+    isQueuedLocal: Boolean,
     onStop: () -> Unit,
 ) {
     val roleColor = when (message.role) {
-        AgentMessageRoleDto.USER -> CyberpunkColors.Yellow
+        AgentMessageRoleDto.USER -> if (isQueuedLocal) CyberpunkColors.Cyan else CyberpunkColors.Yellow
         AgentMessageRoleDto.ASSISTANT -> CyberpunkColors.NeonGreen
     }
+    val messageColor = if (isQueuedLocal) CyberpunkColors.TextMuted else CyberpunkColors.TextPrimary
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
@@ -273,7 +298,10 @@ private fun MessageRow(
                 color = roleColor,
             )
 
-            if (message.role == AgentMessageRoleDto.ASSISTANT && message.status.equals("processing", ignoreCase = true)) {
+            if (!isQueuedLocal &&
+                message.role == AgentMessageRoleDto.ASSISTANT &&
+                message.status.equals("processing", ignoreCase = true)
+            ) {
                 Text(
                     text = "STOP",
                     style = MaterialTheme.typography.labelMedium,
@@ -286,10 +314,13 @@ private fun MessageRow(
         Text(
             text = message.text.ifBlank { "..." },
             style = MaterialTheme.typography.bodyMedium,
-            color = CyberpunkColors.TextPrimary,
+            color = messageColor,
         )
 
-        if (message.role == AgentMessageRoleDto.ASSISTANT && message.status.equals("done", ignoreCase = true)) {
+        if (!isQueuedLocal &&
+            message.role == AgentMessageRoleDto.ASSISTANT &&
+            message.status.equals("done", ignoreCase = true)
+        ) {
             val provider = message.provider.orEmpty().ifBlank { "n/a" }
             val model = message.model.orEmpty().ifBlank { "n/a" }
             val tokens = message.usage?.let { usage ->
@@ -429,4 +460,14 @@ private fun previousAgentId(order: List<AgentId>, activeAgentId: AgentId?): Agen
     if (order.isEmpty()) return null
     val currentIndex = order.indexOf(activeAgentId).takeIf { it >= 0 } ?: 0
     return order[(currentIndex - 1 + order.size) % order.size]
+}
+
+private fun QueuedMessageState.asDisplayMessage(): AgentMessageState {
+    return AgentMessageState(
+        id = id,
+        role = AgentMessageRoleDto.USER,
+        text = text,
+        status = status.name.lowercase(),
+        createdAt = createdAt,
+    )
 }

@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import org.w3c.dom.WebSocket
 import kotlin.coroutines.resume
@@ -22,6 +24,7 @@ class WsAgentGateway(
 
     private val log = Logger.withTag("WsAgentGateway")
     private val _events = MutableSharedFlow<AgentWsServerMessageDto>(extraBufferCapacity = 64)
+    private val sendMutex = Mutex()
     private var socket: WebSocket? = null
 
     private val json = Json {
@@ -143,11 +146,13 @@ class WsAgentGateway(
     }
 
     override suspend fun send(message: AgentWsClientMessageDto): Result<Unit> = runCatching {
-        val ws = socket ?: throw RuntimeException("WebSocket is not connected")
-        if (ws.readyState != OPEN_STATE) {
-            throw RuntimeException("WebSocket is not open")
+        sendMutex.withLock {
+            val ws = socket ?: throw RuntimeException("WebSocket is not connected")
+            if (ws.readyState != OPEN_STATE) {
+                throw RuntimeException("WebSocket is not open")
+            }
+            ws.send(json.encodeToString(AgentWsClientMessageDto.serializer(), message))
         }
-        ws.send(json.encodeToString(AgentWsClientMessageDto.serializer(), message))
     }
 
     private fun resolveWsUrl(): String {
