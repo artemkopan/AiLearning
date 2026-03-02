@@ -9,8 +9,10 @@ import io.artemkopan.ai.sharedui.feature.errordialog.viewmodel.ErrorDialogViewMo
 import io.artemkopan.ai.sharedui.feature.root.viewmodel.RootViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.annotation.Single
 import org.koin.core.parameter.parametersOf
 
+@Single(binds = [SharedUiViewModelFactory::class])
 class KoinSharedUiViewModelFactory : SharedUiViewModelFactory {
     @Composable
     override fun root(): RootViewModel = koinViewModel()

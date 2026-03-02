@@ -3,7 +3,9 @@ package io.artemkopan.ai.backend.agent.persistence
 import io.artemkopan.ai.backend.agent.persistence.operation.*
 import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
+import org.koin.core.annotation.Single
 
+@Single(binds = [AgentRepository::class])
 class PostgresAgentRepository internal constructor(
     private val getStateOperation: Lazy<GetStateOperation>,
     private val createAgentOperation: Lazy<CreateAgentOperation>,

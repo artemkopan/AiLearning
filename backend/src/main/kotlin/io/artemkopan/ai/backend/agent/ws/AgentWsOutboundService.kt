@@ -7,7 +7,9 @@ import io.artemkopan.ai.sharedcontract.AgentWsServerMessageDto
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.serialization.json.Json
+import org.koin.core.annotation.Single
 
+@Single
 open class AgentWsOutboundService(
     private val sessionRegistry: AgentWsSessionRegistry,
     private val mapper: AgentWsMapper,

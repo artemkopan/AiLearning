@@ -1,5 +1,8 @@
 package io.artemkopan.ai.sharedui.usecase
 
+import org.koin.core.annotation.Factory
+
+@Factory
 class FilterTemperatureInputUseCase {
     operator fun invoke(value: String): String {
         return buildString {

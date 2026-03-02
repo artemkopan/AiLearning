@@ -10,10 +10,12 @@ import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.sharedcontract.SendAgentMessageCommandDto
 import kotlinx.coroutines.CancellationException
+import org.koin.core.annotation.Factory
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import kotlin.random.Random
 
+@Factory(binds = [AgentWsMessageUseCase::class])
 class SendAgentMessageWsUseCase(
     private val processingRegistry: AgentWsProcessingRegistry,
     private val startAgentMessageUseCase: StartAgentMessageUseCase,

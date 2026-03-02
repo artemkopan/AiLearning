@@ -2,8 +2,10 @@ package io.artemkopan.ai.backend.http.router
 
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.koin.core.annotation.Single
 import org.slf4j.LoggerFactory
 
+@Single(binds = [RouterHandler::class])
 class HealthRouterHandler : RouterHandler {
     private val logger = LoggerFactory.getLogger(HealthRouterHandler::class.java)
 

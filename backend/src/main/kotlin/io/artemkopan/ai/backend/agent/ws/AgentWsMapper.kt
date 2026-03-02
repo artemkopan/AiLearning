@@ -3,7 +3,9 @@ package io.artemkopan.ai.backend.agent.ws
 import io.artemkopan.ai.core.domain.model.AgentMessageRole
 import io.artemkopan.ai.core.domain.model.AgentState
 import io.artemkopan.ai.sharedcontract.*
+import org.koin.core.annotation.Single
 
+@Single
 class AgentWsMapper {
     fun toSnapshotMessage(state: AgentState): AgentStateSnapshotMessageDto {
         return AgentStateSnapshotMessageDto(

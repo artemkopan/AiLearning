@@ -4,7 +4,9 @@ import io.artemkopan.ai.backend.agent.ws.AgentWsOutboundService
 import io.artemkopan.ai.core.application.model.SelectAgentCommand
 import io.artemkopan.ai.core.application.usecase.SelectAgentUseCase
 import io.artemkopan.ai.sharedcontract.SelectAgentCommandDto
+import org.koin.core.annotation.Factory
 
+@Factory(binds = [AgentWsMessageUseCase::class])
 class SelectAgentWsUseCase(
     private val selectAgentUseCase: SelectAgentUseCase,
     private val outboundService: AgentWsOutboundService,

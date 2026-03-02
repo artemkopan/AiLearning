@@ -5,7 +5,9 @@ import io.artemkopan.ai.backend.agent.ws.toDomain
 import io.artemkopan.ai.core.application.model.UpdateAgentDraftCommand
 import io.artemkopan.ai.core.application.usecase.UpdateAgentDraftUseCase
 import io.artemkopan.ai.sharedcontract.UpdateAgentDraftCommandDto
+import org.koin.core.annotation.Factory
 
+@Factory(binds = [AgentWsMessageUseCase::class])
 class UpdateAgentDraftWsUseCase(
     private val updateAgentDraftUseCase: UpdateAgentDraftUseCase,
     private val outboundService: AgentWsOutboundService,

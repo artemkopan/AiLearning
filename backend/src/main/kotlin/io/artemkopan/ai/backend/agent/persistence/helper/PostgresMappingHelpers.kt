@@ -3,7 +3,9 @@ package io.artemkopan.ai.backend.agent.persistence.helper
 import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.core.domain.model.*
 import org.jetbrains.exposed.sql.ResultRow
+import org.koin.core.annotation.Single
 
+@Single
 internal class PostgresMappingHelpers(
     private val config: Lazy<AppConfig>,
 ) {

@@ -5,7 +5,9 @@ import io.artemkopan.ai.backend.agent.ws.AgentWsProcessingRegistry
 import io.artemkopan.ai.core.application.model.StopAgentMessageCommand
 import io.artemkopan.ai.core.application.usecase.StopAgentMessageUseCase
 import io.artemkopan.ai.sharedcontract.StopAgentMessageCommandDto
+import org.koin.core.annotation.Factory
 
+@Factory(binds = [AgentWsMessageUseCase::class])
 class StopAgentMessageWsUseCase(
     private val processingRegistry: AgentWsProcessingRegistry,
     private val stopAgentMessageUseCase: StopAgentMessageUseCase,

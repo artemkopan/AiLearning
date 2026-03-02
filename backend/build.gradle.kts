@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
     application
 }
 
@@ -36,6 +37,8 @@ dependencies {
     implementation(libs.kermit)
     implementation(libs.koin.ktor)
     implementation(libs.koin.logger.slf4j)
+    implementation(libs.koin.annotations)
+    ksp(libs.koin.ksp.compiler)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
     implementation(libs.postgresql)

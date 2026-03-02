@@ -5,12 +5,14 @@ import io.artemkopan.ai.sharedui.core.session.SessionState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import org.koin.core.annotation.Factory
 
 data class ActiveModelSelection(
     val agentId: AgentId,
     val modelId: String,
 )
 
+@Factory
 class ObserveActiveModelSelectionUseCase(
     private val normalizeModelUseCase: NormalizeModelUseCase,
 ) {

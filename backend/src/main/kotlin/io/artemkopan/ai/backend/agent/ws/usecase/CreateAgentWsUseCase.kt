@@ -3,7 +3,9 @@ package io.artemkopan.ai.backend.agent.ws.usecase
 import io.artemkopan.ai.backend.agent.ws.AgentWsOutboundService
 import io.artemkopan.ai.core.application.usecase.CreateAgentUseCase
 import io.artemkopan.ai.sharedcontract.CreateAgentCommandDto
+import org.koin.core.annotation.Factory
 
+@Factory(binds = [AgentWsMessageUseCase::class])
 class CreateAgentWsUseCase(
     private val createAgentUseCase: CreateAgentUseCase,
     private val outboundService: AgentWsOutboundService,

@@ -4,7 +4,9 @@ import io.artemkopan.ai.backend.agent.ws.toDto
 import io.artemkopan.ai.core.application.usecase.stats.AgentStats
 import io.artemkopan.ai.core.domain.model.AgentMessageRole
 import io.artemkopan.ai.sharedcontract.*
+import org.koin.core.annotation.Single
 
+@Single
 class AgentStatsHttpMapper {
     fun toDto(stats: AgentStats): AgentStatsDto {
         return AgentStatsDto(

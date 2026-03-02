@@ -1,7 +1,9 @@
 package io.artemkopan.ai.backend.provider
 
 import io.artemkopan.ai.sharedcontract.ModelOptionDto
+import org.koin.core.annotation.Single
 
+@Single(binds = [LlmModelCatalog::class])
 class DeepSeekModelCatalog : LlmModelCatalog {
     override fun curatedModels(fallbackContextWindowTokens: Int): List<ModelOptionDto> = listOf(
         ModelOptionDto(

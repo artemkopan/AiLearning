@@ -6,7 +6,9 @@ import io.artemkopan.ai.core.domain.model.AgentState
 import io.artemkopan.ai.core.domain.model.UserId
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.koin.core.annotation.Single
 
+@Single
 internal class CloseAgentOperation(
     private val runtime: Lazy<PostgresDbRuntime>,
     private val stateHelpers: Lazy<PostgresStateHelpers>,

@@ -1,10 +1,12 @@
 package io.artemkopan.ai.backend.agent.ws
 
-import io.ktor.server.websocket.DefaultWebSocketServerSession
-import io.ktor.websocket.Frame
+import io.ktor.server.websocket.*
+import io.ktor.websocket.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.koin.core.annotation.Single
 
+@Single
 class AgentWsSessionRegistry {
     private val mutex = Mutex()
     private val sessionsByUser = mutableMapOf<String, LinkedHashSet<DefaultWebSocketServerSession>>()

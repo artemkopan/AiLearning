@@ -3,7 +3,9 @@ package io.artemkopan.ai.backend.agent.ws
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.koin.core.annotation.Single
 
+@Single
 class AgentWsProcessingRegistry {
     private val wsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val processingJobs = mutableMapOf<String, ProcessingJob>()

@@ -6,9 +6,11 @@ import io.artemkopan.ai.core.application.usecase.GetAgentStateUseCase
 import io.artemkopan.ai.sharedcontract.*
 import io.ktor.server.websocket.*
 import kotlinx.serialization.json.Json
+import org.koin.core.annotation.Single
 import org.slf4j.Logger
 import kotlin.reflect.KClass
 
+@Single
 class AgentWsMessageHandler(
     private val getAgentStateUseCase: GetAgentStateUseCase,
     private val sessionRegistry: AgentWsSessionRegistry,

@@ -5,7 +5,9 @@ import io.artemkopan.ai.core.domain.model.AgentId
 import io.artemkopan.ai.core.domain.model.UserId
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.sharedcontract.SwitchBranchCommandDto
+import org.koin.core.annotation.Factory
 
+@Factory(binds = [AgentWsMessageUseCase::class])
 class SwitchBranchWsUseCase(
     private val agentRepository: AgentRepository,
     private val outboundService: AgentWsOutboundService,

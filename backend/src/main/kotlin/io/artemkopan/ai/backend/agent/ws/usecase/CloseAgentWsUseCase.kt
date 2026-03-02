@@ -4,7 +4,9 @@ import io.artemkopan.ai.backend.agent.ws.AgentWsOutboundService
 import io.artemkopan.ai.core.application.model.CloseAgentCommand
 import io.artemkopan.ai.core.application.usecase.CloseAgentUseCase
 import io.artemkopan.ai.sharedcontract.CloseAgentCommandDto
+import org.koin.core.annotation.Factory
 
+@Factory(binds = [AgentWsMessageUseCase::class])
 class CloseAgentWsUseCase(
     private val closeAgentUseCase: CloseAgentUseCase,
     private val outboundService: AgentWsOutboundService,

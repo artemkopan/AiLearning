@@ -9,8 +9,10 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.koin.core.annotation.Single
 import org.slf4j.LoggerFactory
 
+@Single(binds = [RouterHandler::class])
 class GenerateTextRouterHandler(
     private val generateTextUseCase: GenerateTextUseCase,
 ) : RouterHandler {

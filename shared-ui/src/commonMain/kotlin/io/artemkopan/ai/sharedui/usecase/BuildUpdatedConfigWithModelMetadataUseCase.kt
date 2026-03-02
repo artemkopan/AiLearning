@@ -3,7 +3,9 @@ package io.artemkopan.ai.sharedui.usecase
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.ModelMetadataDto
 import io.artemkopan.ai.sharedcontract.ModelOptionDto
+import org.koin.core.annotation.Factory
 
+@Factory
 class BuildUpdatedConfigWithModelMetadataUseCase {
     operator fun invoke(
         config: AgentConfigDto,

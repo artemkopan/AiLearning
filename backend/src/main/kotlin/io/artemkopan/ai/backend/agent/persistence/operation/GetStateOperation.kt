@@ -4,7 +4,9 @@ import io.artemkopan.ai.backend.agent.persistence.helper.PostgresDbRuntime
 import io.artemkopan.ai.backend.agent.persistence.helper.PostgresStateHelpers
 import io.artemkopan.ai.core.domain.model.AgentState
 import io.artemkopan.ai.core.domain.model.UserId
+import org.koin.core.annotation.Single
 
+@Single
 internal class GetStateOperation(
     private val runtime: Lazy<PostgresDbRuntime>,
     private val stateHelpers: Lazy<PostgresStateHelpers>,

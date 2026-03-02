@@ -11,8 +11,10 @@ import io.ktor.server.routing.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import org.koin.core.annotation.Single
 import org.slf4j.LoggerFactory
 
+@Single(binds = [RouterHandler::class])
 class AgentConfigRouterHandler(
     private val llmRepository: LlmRepository,
     private val modelCatalog: LlmModelCatalog,

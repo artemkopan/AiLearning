@@ -6,7 +6,9 @@ import io.artemkopan.ai.sharedcontract.ModelMetadataDto
 import io.ktor.http.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.koin.core.annotation.Single
 
+@Single(binds = [RouterHandler::class])
 class ModelMetadataRouterHandler(
     private val llmRepository: LlmRepository,
 ) : RouterHandler {

@@ -10,7 +10,9 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
+import org.koin.core.annotation.Single
 
+@Single
 internal class UpsertMessageEmbeddingOperation(
     private val runtime: Lazy<PostgresDbRuntime>,
 ) {

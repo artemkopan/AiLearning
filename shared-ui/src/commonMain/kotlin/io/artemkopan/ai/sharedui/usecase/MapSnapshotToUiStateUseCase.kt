@@ -6,6 +6,7 @@ import io.artemkopan.ai.sharedui.core.session.AgentId
 import io.artemkopan.ai.sharedui.core.session.AgentMessageState
 import io.artemkopan.ai.sharedui.core.session.AgentState
 import io.artemkopan.ai.sharedui.core.session.UsageResult
+import org.koin.core.annotation.Factory
 
 data class SnapshotUiStateResult(
     val agents: Map<AgentId, AgentState>,
@@ -14,6 +15,7 @@ data class SnapshotUiStateResult(
     val draftUpdates: List<AgentState>,
 )
 
+@Factory
 class MapSnapshotToUiStateUseCase(
     private val normalizeModelUseCase: NormalizeModelUseCase,
 ) {

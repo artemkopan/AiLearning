@@ -67,7 +67,22 @@ web-host        → Web app entry point (JS), wires shared-ui with HTTP gateway
 
 ### Backend DI
 
-Koin-based DI via `appModules()`. Create new use cases there and wire dependencies.
+Koin DI is hybrid: manual modules + KSP-generated modules.
+
+- `appModules(config)` is the backend entrypoint and must include:
+  - manual runtime/core modules (`networkModule`, `dataModule`, `applicationModule`, `httpModule`, `wsModule`)
+  - generated module from `BackendScanModule().module` (via `org.koin.ksp.generated.*`)
+- Use Koin annotations in backend-owned classes:
+  - `@Factory` for use cases (including WS command use cases)
+  - `@Single` for long-lived services/handlers/mappers/repository/runtime components
+  - use `binds = [...]` where interface binding is required
+- Keep `core/domain` and `core/application` free from DI annotations; wire core classes manually in `KoinModules.kt`.
+- Keep these providers manual in backend DI:
+  - `AppConfig` runtime injection
+  - `Json` and `HttpClient`
+  - core/data concrete adapters (`LlmNetworkClient`, `LlmRepository`)
+  - WS dispatch map and startup validation
+  - `List<RouterHandler>` aggregation
 
 ### Backend Persistence (Agent Repository) Conventions
 
@@ -116,7 +131,7 @@ Koin-based DI via `appModules()`. Create new use cases there and wire dependenci
   - duplicate handler registrations for the same DTO type must fail
 - When adding a new WS DTO command, update all of:
   - new `*WsUseCase` implementation
-  - Koin registration in `wsModule`
+  - add `@Factory(binds = [AgentWsMessageUseCase::class])` on the use case class
   - dispatcher map coverage (startup validation must pass)
   - tests for dispatch/binding and command behavior
 
@@ -134,14 +149,14 @@ Koin-based DI via `appModules()`. Create new use cases there and wire dependenci
   - inject and compose router handlers
   - avoid endpoint business logic in module body
 - Router handlers must be injected via Koin:
-  - register concrete handlers in `httpModule`
-  - bind each as `RouterHandler` (use `bind RouterHandler::class`)
+  - annotate each router handler with `@Single(binds = [RouterHandler::class])`
+  - rely on backend component scan (`BackendScanModule`) for registration
   - expose `List<RouterHandler>` via `getAll<RouterHandler>()`
 - Keep shared call-level helpers (for example request id and user scope resolution) in dedicated routing support files, not duplicated across handlers.
 - For heavy dependencies that should not be eagerly created during route registration (for example WS handler), prefer `Lazy<T>` injection in router handlers.
 - When adding a new endpoint, update all of:
   - new `*RouterHandler` class
-  - Koin registration in `httpModule`
+  - add `@Single(binds = [RouterHandler::class])` on the handler
   - endpoint list in this document
   - tests that validate route availability/behavior
 
@@ -205,6 +220,8 @@ shared-ui/src/commonMain/kotlin/io/artemkopan/ai/sharedui/
 - Queue orchestration (enqueue/drain/stop/retry/error handling) must live in use-case layer, not in `AgentSessionStore`.
 - ViewModels may read state directly from `AgentSessionStore` flows, but write paths must go through use cases.
 - Keep `SharedUiModule` wiring explicit:
-  - register feature action use cases in DI
-  - inject use cases into ViewModels
+  - include generated module from `SharedUiScanModule().module` (via `org.koin.ksp.generated.*`)
+  - annotate shared-ui use cases with `@Factory`
+  - keep runtime bindings manual (`AgentGateway`, `AgentSessionStore`)
+  - keep ViewModel registrations explicit in `SharedUiModule` (`viewModel { ... }`)
   - do not inject gateway directly into feature ViewModels

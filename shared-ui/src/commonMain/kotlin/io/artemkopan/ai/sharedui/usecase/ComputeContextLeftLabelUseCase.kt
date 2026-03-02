@@ -4,10 +4,12 @@ import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.FullHistoryContextConfigDto
 import io.artemkopan.ai.sharedui.core.session.AgentState
 import io.artemkopan.ai.sharedui.core.session.STATUS_STOPPED
+import org.koin.core.annotation.Factory
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.round
 
+@Factory
 class ComputeContextLeftLabelUseCase {
     fun computeContextUsedTokens(agent: AgentState): Int {
         val summaryTokens = if (agent.contextConfig is FullHistoryContextConfigDto) 0 else estimateTokens(agent.contextSummary)

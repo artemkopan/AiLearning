@@ -9,7 +9,9 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.koin.core.annotation.Single
 
+@Single
 internal class PostgresDbRuntime(
     private val config: Lazy<AppConfig>,
     private val log: Lazy<Logger>,

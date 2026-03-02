@@ -4,7 +4,9 @@ import io.artemkopan.ai.backend.agent.ws.AgentWsMessageHandler
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
+import org.koin.core.annotation.Single
 
+@Single(binds = [RouterHandler::class])
 class AgentWsRouterHandler(
     private val wsHandler: Lazy<AgentWsMessageHandler>,
 ) : RouterHandler {

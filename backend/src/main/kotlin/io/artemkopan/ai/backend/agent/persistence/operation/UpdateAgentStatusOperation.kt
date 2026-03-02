@@ -9,7 +9,9 @@ import io.artemkopan.ai.core.domain.model.AgentStatus
 import io.artemkopan.ai.core.domain.model.UserId
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.update
+import org.koin.core.annotation.Single
 
+@Single
 internal class UpdateAgentStatusOperation(
     private val runtime: Lazy<PostgresDbRuntime>,
     private val stateHelpers: Lazy<PostgresStateHelpers>,

@@ -2,7 +2,9 @@ package io.artemkopan.ai.backend.agent.persistence.helper
 
 import io.artemkopan.ai.core.domain.model.*
 import org.jetbrains.exposed.sql.*
+import org.koin.core.annotation.Single
 
+@Single
 internal class PostgresStateHelpers(
     private val runtime: Lazy<PostgresDbRuntime>,
     private val mapping: Lazy<PostgresMappingHelpers>,

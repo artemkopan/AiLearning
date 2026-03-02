@@ -9,7 +9,9 @@ import io.artemkopan.ai.core.domain.model.UserId
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.selectAll
+import org.koin.core.annotation.Single
 
+@Single
 internal class ListMessagesAfterOperation(
     private val runtime: Lazy<PostgresDbRuntime>,
     private val mapping: Lazy<PostgresMappingHelpers>,

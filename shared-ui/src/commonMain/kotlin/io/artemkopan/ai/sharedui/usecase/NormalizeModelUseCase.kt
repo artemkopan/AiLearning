@@ -1,7 +1,9 @@
 package io.artemkopan.ai.sharedui.usecase
 
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
+import org.koin.core.annotation.Factory
 
+@Factory
 class NormalizeModelUseCase {
     operator fun invoke(value: String, config: AgentConfigDto?): String {
         val trimmed = value.trim()
