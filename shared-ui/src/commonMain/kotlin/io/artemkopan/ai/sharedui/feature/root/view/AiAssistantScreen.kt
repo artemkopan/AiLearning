@@ -16,6 +16,8 @@ import io.artemkopan.ai.sharedui.factory.SharedUiViewModelFactory
 import io.artemkopan.ai.sharedui.feature.agentssidepanel.view.AgentsSidePanelFeature
 import io.artemkopan.ai.sharedui.feature.conversationcolumn.view.ConversationColumnFeature
 import io.artemkopan.ai.sharedui.feature.errordialog.view.ErrorDialogFeature
+import io.artemkopan.ai.sharedui.feature.root.model.RootShortcutEvent
+import io.artemkopan.ai.sharedui.feature.root.model.RootShortcutKey
 import io.artemkopan.ai.sharedui.feature.root.viewmodel.RootViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.view.SettingsColumnFeature
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
@@ -50,29 +52,7 @@ fun AiAssistantScreen(
                 .focusable()
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    when {
-                        event.isCtrlPressed && event.key == Key.Enter -> {
-                            rootViewModel.onSubmitShortcut()
-                            true
-                        }
-
-                        event.isAltPressed && event.key == Key.DirectionDown -> {
-                            rootViewModel.onSelectNextAgentShortcut()
-                            true
-                        }
-
-                        event.isAltPressed && event.key == Key.DirectionUp -> {
-                            rootViewModel.onSelectPreviousAgentShortcut()
-                            true
-                        }
-
-                        event.isAltPressed && event.key == Key.N -> {
-                            rootViewModel.onCreateAgentShortcut()
-                            true
-                        }
-
-                        else -> false
-                    }
+                    rootViewModel.onShortcut(event.toRootShortcutEvent())
                 },
             color = CyberpunkColors.DarkBackground,
         ) {
@@ -121,6 +101,20 @@ fun AiAssistantScreen(
 
         ErrorDialogFeature(viewModel = errorDialogViewModel)
     }
+}
+
+private fun KeyEvent.toRootShortcutEvent(): RootShortcutEvent {
+    return RootShortcutEvent(
+        key = when (key) {
+            Key.Enter -> RootShortcutKey.ENTER
+            Key.DirectionDown -> RootShortcutKey.DIRECTION_DOWN
+            Key.DirectionUp -> RootShortcutKey.DIRECTION_UP
+            Key.N -> RootShortcutKey.N
+            else -> RootShortcutKey.OTHER
+        },
+        isCtrlPressed = isCtrlPressed,
+        isAltPressed = isAltPressed,
+    )
 }
 
 @Composable

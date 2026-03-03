@@ -80,7 +80,7 @@ fun ContextConfigPanel(
                 CyberpunkTextField(
                     value = contextConfig.recentMessagesN.toString(),
                     onValueChange = { value ->
-                        if (!isLocked) onRecentMessagesChanged(value.filter { it.isDigit() })
+                        if (!isLocked) onRecentMessagesChanged(value)
                     },
                     label = "RECENT N",
                     modifier = Modifier.fillMaxWidth(),
@@ -89,7 +89,7 @@ fun ContextConfigPanel(
                 CyberpunkTextField(
                     value = contextConfig.summarizeEveryK.toString(),
                     onValueChange = { value ->
-                        if (!isLocked) onSummarizeEveryChanged(value.filter { it.isDigit() })
+                        if (!isLocked) onSummarizeEveryChanged(value)
                     },
                     label = "SUMMARIZE EVERY K",
                     modifier = Modifier.fillMaxWidth(),
@@ -100,7 +100,7 @@ fun ContextConfigPanel(
                 CyberpunkTextField(
                     value = contextConfig.windowSize.toString(),
                     onValueChange = { value ->
-                        if (!isLocked) onWindowSizeChanged(value.filter { it.isDigit() })
+                        if (!isLocked) onWindowSizeChanged(value)
                     },
                     label = "WINDOW SIZE",
                     modifier = Modifier.fillMaxWidth(),
@@ -111,7 +111,7 @@ fun ContextConfigPanel(
                 CyberpunkTextField(
                     value = contextConfig.recentMessagesN.toString(),
                     onValueChange = { value ->
-                        if (!isLocked) onRecentMessagesChanged(value.filter { it.isDigit() })
+                        if (!isLocked) onRecentMessagesChanged(value)
                     },
                     label = "RECENT N",
                     modifier = Modifier.fillMaxWidth(),
@@ -122,7 +122,7 @@ fun ContextConfigPanel(
                 CyberpunkTextField(
                     value = contextConfig.recentMessagesN.toString(),
                     onValueChange = { value ->
-                        if (!isLocked) onRecentMessagesChanged(value.filter { it.isDigit() })
+                        if (!isLocked) onRecentMessagesChanged(value)
                     },
                     label = "RECENT N",
                     modifier = Modifier.fillMaxWidth(),
@@ -195,8 +195,8 @@ private fun StrategyOption(
         text = label,
         style = MaterialTheme.typography.bodySmall,
         color = when {
-            !enabled -> CyberpunkColors.TextMuted
-            selected -> CyberpunkColors.Yellow
+            selected -> CyberpunkColors.Red
+            !enabled -> CyberpunkColors.TextSecondary
             else -> CyberpunkColors.TextSecondary
         },
         modifier = Modifier.clickable(enabled = enabled, onClick = onClick),

@@ -28,30 +28,68 @@ val sharedUiFeatureModule = module {
     }
 
     viewModel {
-        RootViewModel(sessionStore = get())
+        RootViewModel(
+            sessionStore = get(),
+            resolveRootShortcutActionUseCase = get(),
+            submitFromActiveAgentActionUseCase = get(),
+            createAgentActionUseCase = get(),
+            selectNextAgentActionUseCase = get(),
+            selectPreviousAgentActionUseCase = get(),
+        )
     }
     viewModel {
-        AgentsSidePanelViewModel(sessionStore = get())
+        AgentsSidePanelViewModel(
+            sessionStore = get(),
+            createAgentActionUseCase = get(),
+            selectAgentActionUseCase = get(),
+            closeAgentActionUseCase = get(),
+            formatAgentTitleUseCase = get(),
+        )
     }
     viewModel {
-        ErrorDialogViewModel(sessionStore = get())
+        ErrorDialogViewModel(
+            sessionStore = get(),
+            dismissErrorActionUseCase = get(),
+        )
     }
     viewModel { (agentId: AgentId) ->
         ConversationColumnViewModel(
             agentId = agentId,
             sessionStore = get(),
+            updateDraftMessageActionUseCase = get(),
+            submitMessageActionUseCase = get(),
+            stopQueueActionUseCase = get(),
+            createBranchActionUseCase = get(),
+            findSlashTokenBoundsUseCase = get(),
+            insertCommandTokenUseCase = get(),
+            buildCommandPaletteItemsUseCase = get(),
+            buildConversationDisplayMessagesUseCase = get(),
+            buildConversationStatusTextUseCase = get(),
+            conversationCommandRegistry = get(),
         )
     }
     viewModel { (agentId: AgentId) ->
         SettingsColumnViewModel(
             agentId = agentId,
             sessionStore = get(),
+            updateAgentModeActionUseCase = get(),
+            updateContextStrategyActionUseCase = get(),
+            updateContextRecentMessagesActionUseCase = get(),
+            updateContextSummarizeEveryActionUseCase = get(),
+            updateContextWindowSizeActionUseCase = get(),
+            switchBranchActionUseCase = get(),
+            deleteBranchActionUseCase = get(),
+            keepDigitsUseCase = get(),
         )
     }
     viewModel { (agentId: AgentId) ->
         ConfigPanelViewModel(
             agentId = agentId,
             sessionStore = get(),
+            updateModelActionUseCase = get(),
+            updateMaxOutputTokensActionUseCase = get(),
+            updateTemperatureActionUseCase = get(),
+            updateStopSequencesActionUseCase = get(),
         )
     }
 }

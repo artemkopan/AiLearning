@@ -10,8 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
-import io.artemkopan.ai.sharedui.core.session.AgentState
 import io.artemkopan.ai.sharedui.feature.configpanel.view.ConfigPanelFeature
 import io.artemkopan.ai.sharedui.feature.configpanel.viewmodel.ConfigPanelViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
@@ -61,9 +59,10 @@ fun SettingsColumnFeature(
             )
 
             RuntimeInfoPanel(
-                agent = agent,
                 contextTotalTokensLabel = state.contextTotalTokensLabel,
                 contextLeftLabel = state.contextLeftLabel,
+                runtimeOutputTokensLabel = state.runtimeOutputTokensLabel,
+                runtimeApiDurationLabel = state.runtimeApiDurationLabel,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -83,22 +82,19 @@ fun SettingsColumnFeature(
 
 @Composable
 private fun RuntimeInfoPanel(
-    agent: AgentState,
     contextTotalTokensLabel: String,
     contextLeftLabel: String,
+    runtimeOutputTokensLabel: String,
+    runtimeApiDurationLabel: String,
     modifier: Modifier = Modifier,
 ) {
-    val latestAssistant = agent.messages.lastOrNull {
-        it.role == AgentMessageRoleDto.ASSISTANT && it.status.equals("done", ignoreCase = true)
-    }
-
     CyberpunkPanel(
         title = "RUNTIME",
         accentColor = CyberpunkColors.Cyan,
         modifier = modifier,
     ) {
         Text(
-            text = "out tokens: ${latestAssistant?.usage?.outputTokens?.toString() ?: "n/a"}",
+            text = "out tokens: $runtimeOutputTokensLabel",
             style = MaterialTheme.typography.bodySmall,
             color = CyberpunkColors.Cyan,
         )
@@ -113,7 +109,7 @@ private fun RuntimeInfoPanel(
             color = CyberpunkColors.TextPrimary,
         )
         Text(
-            text = "api duration: ${latestAssistant?.latencyMs?.let { "$it ms" } ?: "n/a"}",
+            text = "api duration: $runtimeApiDurationLabel",
             style = MaterialTheme.typography.bodySmall,
             color = CyberpunkColors.TextMuted,
         )

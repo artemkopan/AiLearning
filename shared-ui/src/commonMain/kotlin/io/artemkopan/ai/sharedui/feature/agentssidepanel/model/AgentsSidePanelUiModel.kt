@@ -5,6 +5,7 @@ import io.artemkopan.ai.sharedui.core.session.AgentId
 data class AgentsSidePanelItemModel(
     val id: AgentId,
     val title: String,
+    val displayTitle: String,
     val status: String,
     val isLoading: Boolean,
 )
@@ -12,4 +13,5 @@ data class AgentsSidePanelItemModel(
 data class AgentsSidePanelUiModel(
     val agents: List<AgentsSidePanelItemModel> = emptyList(),
     val activeAgentId: AgentId? = null,
+    val canCloseAgent: Boolean = false,
 )

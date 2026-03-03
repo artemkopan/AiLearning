@@ -8,4 +8,6 @@ data class SettingsColumnUiModel(
     val agentConfig: AgentConfigDto? = null,
     val contextTotalTokensLabel: String = "n/a",
     val contextLeftLabel: String = "n/a",
+    val runtimeOutputTokensLabel: String = "n/a",
+    val runtimeApiDurationLabel: String = "n/a",
 )

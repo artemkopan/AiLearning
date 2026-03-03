@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.artemkopan.ai.sharedui.core.session.AgentId
 import io.artemkopan.ai.sharedui.feature.agentssidepanel.model.AgentsSidePanelItemModel
 import io.artemkopan.ai.sharedui.feature.agentssidepanel.viewmodel.AgentsSidePanelViewModel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkPanel
@@ -27,8 +26,6 @@ fun AgentsSidePanelFeature(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
-    val canAddAgent = state.agents.size < MAX_AGENTS
-    val canCloseAgent = state.agents.size > 1
 
     CyberpunkPanel(
         title = "AGENTS",
@@ -39,7 +36,7 @@ fun AgentsSidePanelFeature(
             AgentItem(
                 item = item,
                 isActive = item.id == state.activeAgentId,
-                showClose = canCloseAgent,
+                showClose = state.canCloseAgent,
                 onSelect = { viewModel.onAgentSelected(item.id) },
                 onClose = { viewModel.onAgentClosed(item.id) },
             )
@@ -48,7 +45,6 @@ fun AgentsSidePanelFeature(
         Spacer(modifier = Modifier.height(4.dp))
 
         AddAgentButton(
-            enabled = canAddAgent,
             onClick = viewModel::onCreateAgentClicked,
         )
     }
@@ -85,7 +81,7 @@ private fun AgentItem(
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = formatAgentTitle(item.id, item.title),
+                text = item.displayTitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = textColor,
                 maxLines = 1,
@@ -120,31 +116,20 @@ private fun AgentItem(
 
 @Composable
 private fun AddAgentButton(
-    enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val textColor = if (enabled) CyberpunkColors.Cyan else CyberpunkColors.TextMuted
-    val label = if (enabled) "+ NEW AGENT" else "MAX AGENTS (5)"
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(2.dp))
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = label,
+            text = "+ NEW AGENT",
             style = MaterialTheme.typography.labelMedium,
-            color = textColor,
+            color = CyberpunkColors.Cyan,
         )
     }
 }
-
-private fun formatAgentTitle(agentId: AgentId, title: String): String {
-    val agentNumber = agentId.value.substringAfter("agent-", "")
-    return if (agentNumber.isNotBlank()) "#$agentNumber: $title" else title
-}
-
-private const val MAX_AGENTS = 5
