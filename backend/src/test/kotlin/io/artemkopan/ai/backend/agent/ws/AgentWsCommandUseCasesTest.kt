@@ -4,6 +4,7 @@ import io.artemkopan.ai.backend.agent.ws.usecase.*
 import io.artemkopan.ai.backend.config.AppConfig
 import io.artemkopan.ai.backend.di.appModules
 import io.artemkopan.ai.core.application.usecase.*
+import io.artemkopan.ai.core.application.usecase.shortcut.ParseMemoryLayerShortcutTokenUseCase
 import io.artemkopan.ai.core.application.usecase.shortcut.ParseStatsShortcutTokensUseCase
 import io.artemkopan.ai.core.application.usecase.shortcut.ResolveStatsShortcutsUseCase
 import io.artemkopan.ai.core.domain.model.AgentMessage
@@ -80,7 +81,9 @@ class AgentWsCommandUseCasesTest {
                 failAgentMessageUseCase = koinApp.koin.get<FailAgentMessageUseCase>(),
                 generateTextUseCase = koinApp.koin.get<GenerateTextUseCase>(),
                 parseStatsShortcutTokensUseCase = koinApp.koin.get<ParseStatsShortcutTokensUseCase>(),
+                parseMemoryLayerShortcutTokenUseCase = koinApp.koin.get<ParseMemoryLayerShortcutTokenUseCase>(),
                 resolveStatsShortcutsUseCase = koinApp.koin.get<ResolveStatsShortcutsUseCase>(),
+                switchAgentMemoryLayerUseCase = koinApp.koin.get<SwitchAgentMemoryLayerUseCase>(),
                 agentRepository = koinApp.koin.get(),
                 outboundService = outbound,
             )

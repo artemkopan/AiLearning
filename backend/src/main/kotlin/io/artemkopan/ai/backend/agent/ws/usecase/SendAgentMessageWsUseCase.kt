@@ -4,6 +4,11 @@ import io.artemkopan.ai.backend.agent.ws.AgentWsOutboundService
 import io.artemkopan.ai.backend.agent.ws.AgentWsProcessingRegistry
 import io.artemkopan.ai.core.application.model.SendAgentMessageCommand
 import io.artemkopan.ai.core.application.usecase.*
+import io.artemkopan.ai.core.application.usecase.shortcut.LONG_TERM_TOKEN
+import io.artemkopan.ai.core.application.usecase.shortcut.MemoryLayerType
+import io.artemkopan.ai.core.application.usecase.shortcut.ParseMemoryLayerShortcutTokenUseCase
+import io.artemkopan.ai.core.application.usecase.shortcut.SHORT_TERM_TOKEN
+import io.artemkopan.ai.core.application.usecase.shortcut.WORKING_TOKEN
 import io.artemkopan.ai.core.application.usecase.shortcut.ParseStatsShortcutTokensUseCase
 import io.artemkopan.ai.core.application.usecase.shortcut.ResolveStatsShortcutsUseCase
 import io.artemkopan.ai.core.domain.model.*
@@ -23,7 +28,9 @@ class SendAgentMessageWsUseCase(
     private val failAgentMessageUseCase: FailAgentMessageUseCase,
     private val generateTextUseCase: GenerateTextUseCase,
     private val parseStatsShortcutTokensUseCase: ParseStatsShortcutTokensUseCase,
+    private val parseMemoryLayerShortcutTokenUseCase: ParseMemoryLayerShortcutTokenUseCase,
     private val resolveStatsShortcutsUseCase: ResolveStatsShortcutsUseCase,
+    private val switchAgentMemoryLayerUseCase: SwitchAgentMemoryLayerUseCase,
     private val agentRepository: AgentRepository,
     private val outboundService: AgentWsOutboundService,
     private val logger: Logger = LoggerFactory.getLogger(SendAgentMessageWsUseCase::class.java),
@@ -41,6 +48,9 @@ class SendAgentMessageWsUseCase(
         }
 
         if (tryHandleStatsShortcutCommand(context, message)) {
+            return Result.success(Unit)
+        }
+        if (tryHandleMemoryLayerShortcutCommand(context, message)) {
             return Result.success(Unit)
         }
 
@@ -230,6 +240,69 @@ class SendAgentMessageWsUseCase(
             .onFailure { throwable -> outboundService.sendOperationFailure(context.session, throwable, message.requestId) }
 
         return true
+    }
+
+    private suspend fun tryHandleMemoryLayerShortcutCommand(
+        context: AgentWsMessageContext,
+        message: SendAgentMessageCommandDto,
+    ): Boolean {
+        val normalizedText = message.text.trim()
+        val token = parseMemoryLayerShortcutTokenUseCase.execute(normalizedText) ?: return false
+
+        switchAgentMemoryLayerUseCase.execute(
+            userId = context.userScope,
+            agentId = message.agentId,
+            layer = token.layer,
+        ).getOrElse { throwable ->
+            outboundService.sendOperationFailure(context.session, throwable, message.requestId)
+            return true
+        }
+
+        val userId = UserId(context.userScope)
+        val agentId = AgentId(message.agentId)
+        val userMessage = AgentMessage(
+            id = AgentMessageId("cmd-${createMessageId()}"),
+            role = AgentMessageRole.USER,
+            text = normalizedText,
+            status = STATUS_DONE,
+            createdAt = 0L,
+        )
+        val assistantMessage = AgentMessage(
+            id = AgentMessageId("cmd-${createMessageId()}"),
+            role = AgentMessageRole.ASSISTANT,
+            text = memoryLayerSwitchResponse(token.layer),
+            status = STATUS_DONE,
+            createdAt = 0L,
+        )
+
+        agentRepository.appendMessage(userId, agentId, userMessage).getOrElse { throwable ->
+            outboundService.sendOperationFailure(context.session, throwable, message.requestId)
+            return true
+        }
+        agentRepository.appendMessage(userId, agentId, assistantMessage)
+            .onSuccess { state -> outboundService.broadcastSnapshot(context.userScope, state) }
+            .onFailure { throwable -> outboundService.sendOperationFailure(context.session, throwable, message.requestId) }
+
+        return true
+    }
+
+    private fun memoryLayerSwitchResponse(layer: MemoryLayerType): String {
+        return when (layer) {
+            MemoryLayerType.SHORT_TERM -> {
+                "MEMORY LAYER SET TO SHORT-TERM ($SHORT_TERM_TOKEN). " +
+                    "Responses now prioritize current dialogue turns from recent message history."
+            }
+
+            MemoryLayerType.WORKING -> {
+                "MEMORY LAYER SET TO WORKING ($WORKING_TOKEN). " +
+                    "Responses now prioritize current task data from rolling summaries plus recent dialogue."
+            }
+
+            MemoryLayerType.LONG_TERM -> {
+                "MEMORY LAYER SET TO LONG-TERM ($LONG_TERM_TOKEN). " +
+                    "Responses now prioritize persistent profile/decisions and retrieved knowledge."
+            }
+        }
     }
 
     private fun createMessageId(): String {

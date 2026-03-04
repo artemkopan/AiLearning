@@ -8,6 +8,7 @@ import io.artemkopan.ai.core.application.mapper.DomainErrorMapper
 import io.artemkopan.ai.core.application.usecase.*
 import io.artemkopan.ai.core.application.usecase.context.*
 import io.artemkopan.ai.core.application.usecase.shortcut.ExpandStatsShortcutsInPromptUseCase
+import io.artemkopan.ai.core.application.usecase.shortcut.ParseMemoryLayerShortcutTokenUseCase
 import io.artemkopan.ai.core.application.usecase.shortcut.ParseStatsShortcutTokensUseCase
 import io.artemkopan.ai.core.application.usecase.shortcut.ResolveStatsShortcutsUseCase
 import io.artemkopan.ai.core.application.usecase.stats.BuildAgentStatsSnippetUseCase
@@ -124,7 +125,7 @@ val applicationModule = module {
         )
     }
     single { SlidingWindowContextPreparationStrategy() }
-    single { StickyFactsContextPreparationStrategy(repository = get()) }
+    single { StickyFactsContextPreparationStrategy() }
     single { BranchingContextPreparationStrategy() }
     factory { BuildFactsExtractionPromptUseCase() }
     factory {
@@ -177,6 +178,7 @@ val applicationModule = module {
     }
     factory { BuildAgentStatsSnippetUseCase() }
     factory { ParseStatsShortcutTokensUseCase() }
+    factory { ParseMemoryLayerShortcutTokenUseCase() }
     factory { ResolveStatsShortcutsUseCase(getAgentStatsUseCase = get(), buildAgentStatsSnippetUseCase = get()) }
     factory {
         ExpandStatsShortcutsInPromptUseCase(
@@ -203,6 +205,7 @@ val applicationModule = module {
     }
     factory { FailAgentMessageUseCase(repository = get()) }
     factory { StopAgentMessageUseCase(repository = get()) }
+    factory { SwitchAgentMemoryLayerUseCase(repository = get()) }
     factory { MapFailureToUserMessageUseCase() }
 }
 

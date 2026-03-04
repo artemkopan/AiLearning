@@ -1,8 +1,12 @@
 package io.artemkopan.ai.core.application.usecase
 
 import io.artemkopan.ai.core.application.error.AppError
+import io.artemkopan.ai.core.application.model.AssistantMemoryModel
 import io.artemkopan.ai.core.application.model.GenerateCommand
+import io.artemkopan.ai.core.application.model.LongTermMemoryLayer
 import io.artemkopan.ai.core.application.model.SendAgentMessageCommand
+import io.artemkopan.ai.core.application.model.ShortTermMemoryLayer
+import io.artemkopan.ai.core.application.model.WorkingMemoryLayer
 import io.artemkopan.ai.core.application.usecase.context.ExtractAndPersistFactsUseCase
 import io.artemkopan.ai.core.application.usecase.context.PrepareAgentContextUseCase
 import io.artemkopan.ai.core.application.usecase.shortcut.ExpandStatsShortcutsInPromptUseCase
@@ -100,10 +104,22 @@ class StartAgentMessageUseCase(
                 message
             }
         }
+        val agentFacts = repository.getAgentFacts(domainUserId, agentId).getOrElse {
+            return Result.failure(it)
+        }
         val conversationPrompt = buildContextPromptUseCase.execute(
-            summary = preparedContext.summaryText,
-            messages = promptMessages,
-            retrievedMemory = retrievedMemory,
+            AssistantMemoryModel(
+                shortTerm = ShortTermMemoryLayer(
+                    dialogueTurns = promptMessages,
+                ),
+                working = WorkingMemoryLayer(
+                    taskDataSummary = preparedContext.summaryText,
+                ),
+                longTerm = LongTermMemoryLayer(
+                    profileAndDecisions = agentFacts?.factsJson.orEmpty(),
+                    retrievedKnowledge = retrievedMemory,
+                ),
+            )
         )
         if (conversationPrompt.isBlank()) {
             return Result.failure(AppError.Validation("Conversation context is empty."))
