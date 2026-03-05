@@ -89,6 +89,7 @@ data class SessionState(
     val contextLeftByAgent: Map<AgentId, String> = emptyMap(),
     val queuedByAgent: Map<AgentId, List<QueuedMessageState>> = emptyMap(),
     val isConnected: Boolean = false,
+    val userProfile: UserProfileState = UserProfileState(),
 )
 
 data class AgentSessionSlice(
@@ -97,6 +98,13 @@ data class AgentSessionSlice(
     val contextTotalTokensLabel: String,
     val contextLeftLabel: String,
     val agentConfig: AgentConfigDto?,
+)
+
+data class UserProfileState(
+    val communicationStyle: String = "concise",
+    val responseFormat: String = "markdown",
+    val restrictions: List<String> = emptyList(),
+    val customInstructions: String = "",
 )
 
 const val STATUS_PROCESSING = "processing"

@@ -206,6 +206,8 @@ val applicationModule = module {
             indexMessageEmbeddingsUseCase = get(),
             expandStatsShortcutsInPromptUseCase = get(),
             extractAndPersistFactsUseCase = get(),
+            getUserProfileUseCase = get(),
+            buildUserProfilePromptSnippetUseCase = get(),
         )
     }
     factory {
@@ -217,6 +219,9 @@ val applicationModule = module {
     factory { FailAgentMessageUseCase(repository = get()) }
     factory { StopAgentMessageUseCase(repository = get()) }
     factory { SwitchAgentMemoryLayerUseCase(repository = get()) }
+    factory { GetUserProfileUseCase(repository = get()) }
+    factory { UpdateUserProfileUseCase(repository = get()) }
+    factory { BuildUserProfilePromptSnippetUseCase() }
     factory { MapFailureToUserMessageUseCase() }
 }
 

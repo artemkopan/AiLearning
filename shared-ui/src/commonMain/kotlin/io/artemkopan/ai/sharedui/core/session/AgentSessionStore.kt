@@ -292,6 +292,25 @@ class AgentSessionStore(
         }
     }
 
+    fun updateUserProfile(
+        communicationStyle: String,
+        responseFormat: String,
+        restrictions: List<String>,
+        customInstructions: String,
+    ) {
+        sendCommand {
+            UpdateUserProfileCommandDto(
+                communicationStyle = communicationStyle,
+                responseFormat = responseFormat,
+                restrictions = restrictions,
+                customInstructions = customInstructions,
+            )
+        }
+    }
+
+    fun observeUserProfile(): Flow<UserProfileState> =
+        sessionState.map { it.userProfile }.distinctUntilChanged()
+
     fun dispose() {
         drainJobsByAgent.values.forEach { it.cancel() }
         drainJobsByAgent.clear()
@@ -308,6 +327,8 @@ class AgentSessionStore(
                         title = "Request Failed",
                         message = event.message,
                     )
+
+                    is UserProfileSnapshotDto -> applyUserProfile(event)
                 }
             }
         }
@@ -373,6 +394,19 @@ class AgentSessionStore(
         cancelDrainsForMissingAgents(mapped.agents.keys)
         mapped.draftUpdates.forEach { sendDraftUpdate(it.id) }
         triggerDrainForQueuedAgents()
+    }
+
+    private fun applyUserProfile(snapshot: UserProfileSnapshotDto) {
+        updateState { current ->
+            current.copy(
+                userProfile = UserProfileState(
+                    communicationStyle = snapshot.communicationStyle,
+                    responseFormat = snapshot.responseFormat,
+                    restrictions = snapshot.restrictions,
+                    customInstructions = snapshot.customInstructions,
+                ),
+            )
+        }
     }
 
     private fun sendDraftUpdate(agentId: AgentId) {

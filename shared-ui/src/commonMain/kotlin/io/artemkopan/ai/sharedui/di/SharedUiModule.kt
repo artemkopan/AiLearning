@@ -8,6 +8,7 @@ import io.artemkopan.ai.sharedui.feature.conversationcolumn.viewmodel.Conversati
 import io.artemkopan.ai.sharedui.feature.errordialog.viewmodel.ErrorDialogViewModel
 import io.artemkopan.ai.sharedui.feature.root.viewmodel.RootViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
+import io.artemkopan.ai.sharedui.feature.userprofile.viewmodel.UserProfileViewModel
 import io.artemkopan.ai.sharedui.gateway.AgentGateway
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -80,6 +81,12 @@ val sharedUiFeatureModule = module {
             switchBranchActionUseCase = get(),
             deleteBranchActionUseCase = get(),
             keepDigitsUseCase = get(),
+        )
+    }
+    viewModel {
+        UserProfileViewModel(
+            sessionStore = get(),
+            updateUserProfileActionUseCase = get(),
         )
     }
     viewModel { (agentId: AgentId) ->

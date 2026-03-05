@@ -95,6 +95,16 @@ data class DeleteBranchCommandDto(
 ) : AgentWsClientMessageDto
 
 @Serializable
+@SerialName("update_user_profile")
+data class UpdateUserProfileCommandDto(
+    val communicationStyle: String,
+    val responseFormat: String,
+    val restrictions: List<String> = emptyList(),
+    val customInstructions: String = "",
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
 data class BranchDto(
     val id: String,
     val name: String,
@@ -116,6 +126,15 @@ sealed interface AgentWsServerMessageDto
 @SerialName("agent_state_snapshot")
 data class AgentStateSnapshotMessageDto(
     val state: AgentStateSnapshotDto,
+) : AgentWsServerMessageDto
+
+@Serializable
+@SerialName("user_profile_snapshot")
+data class UserProfileSnapshotDto(
+    val communicationStyle: String,
+    val responseFormat: String,
+    val restrictions: List<String>,
+    val customInstructions: String,
 ) : AgentWsServerMessageDto
 
 @Serializable

@@ -20,6 +20,7 @@ import io.artemkopan.ai.sharedui.feature.root.model.RootShortcutEvent
 import io.artemkopan.ai.sharedui.feature.root.model.RootShortcutKey
 import io.artemkopan.ai.sharedui.feature.root.viewmodel.RootViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.view.SettingsColumnFeature
+import io.artemkopan.ai.sharedui.feature.userprofile.viewmodel.UserProfileViewModel
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkTheme
 
@@ -32,6 +33,7 @@ fun AiAssistantScreen(
 
     val agentsViewModel = factory.agentsSidePanel()
     val errorDialogViewModel = factory.errorDialog()
+    val userProfileViewModel: UserProfileViewModel = factory.userProfile()
 
     val activeAgentId = rootState.activeAgentId
     val conversationViewModel = activeAgentId?.let { factory.conversation(it) }
@@ -90,6 +92,7 @@ fun AiAssistantScreen(
                         SettingsColumnFeature(
                             settingsViewModel = settingsViewModel,
                             configViewModel = configViewModel,
+                            userProfileViewModel = userProfileViewModel,
                             modifier = Modifier
                                 .width(220.dp)
                                 .fillMaxHeight(),

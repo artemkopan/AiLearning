@@ -24,6 +24,8 @@ class StartAgentMessageUseCase(
     private val indexMessageEmbeddingsUseCase: IndexMessageEmbeddingsUseCase,
     private val expandStatsShortcutsInPromptUseCase: ExpandStatsShortcutsInPromptUseCase,
     private val extractAndPersistFactsUseCase: ExtractAndPersistFactsUseCase,
+    private val getUserProfileUseCase: GetUserProfileUseCase,
+    private val buildUserProfilePromptSnippetUseCase: BuildUserProfilePromptSnippetUseCase,
 ) {
     suspend fun execute(userId: String, command: SendAgentMessageCommand): Result<StartedAgentMessage> {
         val domainUserId = parseUserIdOrError(userId).getOrElse { return Result.failure(it) }
@@ -116,6 +118,9 @@ class StartAgentMessageUseCase(
         val agentFacts = repository.getAgentFacts(domainUserId, agentId).getOrElse {
             return Result.failure(it)
         }
+        val userProfile = getUserProfileUseCase.execute(userId).getOrNull()
+        val userProfileSnippet = buildUserProfilePromptSnippetUseCase.execute(userProfile)
+
         val conversationPrompt = buildContextPromptUseCase.execute(
             AssistantMemoryModel(
                 shortTerm = ShortTermMemoryLayer(
@@ -126,6 +131,7 @@ class StartAgentMessageUseCase(
                 ),
                 longTerm = LongTermMemoryLayer(
                     profileAndDecisions = agentFacts?.factsJson.orEmpty(),
+                    userProfileSnippet = userProfileSnippet,
                     retrievedKnowledge = retrievedMemory,
                 ),
             )

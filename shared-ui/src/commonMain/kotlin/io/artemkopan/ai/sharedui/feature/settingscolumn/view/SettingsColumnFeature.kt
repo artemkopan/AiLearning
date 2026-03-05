@@ -14,6 +14,8 @@ import io.artemkopan.ai.sharedcontract.*
 import io.artemkopan.ai.sharedui.feature.configpanel.view.ConfigPanelFeature
 import io.artemkopan.ai.sharedui.feature.configpanel.viewmodel.ConfigPanelViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
+import io.artemkopan.ai.sharedui.feature.userprofile.view.UserProfileFeature
+import io.artemkopan.ai.sharedui.feature.userprofile.viewmodel.UserProfileViewModel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkPanel
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 
@@ -21,6 +23,7 @@ import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 fun SettingsColumnFeature(
     settingsViewModel: SettingsColumnViewModel,
     configViewModel: ConfigPanelViewModel,
+    userProfileViewModel: UserProfileViewModel,
     modifier: Modifier = Modifier,
 ) {
     val state by settingsViewModel.state.collectAsState()
@@ -65,6 +68,11 @@ fun SettingsColumnFeature(
                 activeBranchId = agent.activeBranchId,
                 onSwitchBranch = settingsViewModel::onSwitchBranch,
                 onDeleteBranch = settingsViewModel::onDeleteBranch,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            UserProfileFeature(
+                viewModel = userProfileViewModel,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

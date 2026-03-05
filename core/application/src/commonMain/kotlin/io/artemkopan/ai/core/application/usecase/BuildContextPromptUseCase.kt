@@ -37,7 +37,10 @@ class BuildContextPromptUseCase {
         val longTermProfile = memory.longTerm.profileAndDecisions.trim()
         val retrievedMemory = memory.longTerm.retrievedKnowledge
 
-        if (workingSummary.isBlank() && shortTerm.isEmpty() && longTermProfile.isBlank() && retrievedMemory.isEmpty()) return ""
+        val userProfileText = memory.longTerm.userProfileSnippet.trim()
+
+        if (workingSummary.isBlank() && shortTerm.isEmpty() && longTermProfile.isBlank()
+            && retrievedMemory.isEmpty() && userProfileText.isBlank()) return ""
 
         return buildString {
             appendLine("Continue the conversation as ASSISTANT.")
@@ -57,6 +60,12 @@ class BuildContextPromptUseCase {
                 appendLine()
                 appendLine("LONG-TERM MEMORY (PROFILE / DECISIONS):")
                 appendLine(longTermProfile)
+            }
+
+            if (userProfileText.isNotBlank()) {
+                appendLine()
+                appendLine("LONG-TERM MEMORY (USER PROFILE PREFERENCES):")
+                appendLine(userProfileText)
             }
 
             if (retrievedMemory.isNotEmpty()) {

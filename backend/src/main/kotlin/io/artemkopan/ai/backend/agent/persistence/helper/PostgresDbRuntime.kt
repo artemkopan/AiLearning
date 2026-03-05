@@ -54,6 +54,7 @@ internal class PostgresDbRuntime(
                     ScopedAgentMessageEmbeddingsTable,
                     ScopedAgentFactsTable,
                     ScopedAgentBranchesTable,
+                    ScopedUserProfileTable,
                 )
             }
             initialized = true

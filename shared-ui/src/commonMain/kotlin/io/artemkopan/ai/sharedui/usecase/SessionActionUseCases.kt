@@ -199,6 +199,25 @@ class SwitchBranchActionUseCase(
 }
 
 @Factory
+class UpdateUserProfileActionUseCase(
+    private val sessionStore: AgentSessionStore,
+) {
+    operator fun invoke(
+        communicationStyle: String,
+        responseFormat: String,
+        restrictions: List<String>,
+        customInstructions: String,
+    ) {
+        sessionStore.updateUserProfile(
+            communicationStyle = communicationStyle,
+            responseFormat = responseFormat,
+            restrictions = restrictions,
+            customInstructions = customInstructions,
+        )
+    }
+}
+
+@Factory
 class DeleteBranchActionUseCase(
     private val sessionStore: AgentSessionStore,
 ) {

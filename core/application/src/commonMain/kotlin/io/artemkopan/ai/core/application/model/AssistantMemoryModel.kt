@@ -19,5 +19,6 @@ data class WorkingMemoryLayer(
 
 data class LongTermMemoryLayer(
     val profileAndDecisions: String,
+    val userProfileSnippet: String = "",
     val retrievedKnowledge: List<RetrievedContextChunk>,
 )

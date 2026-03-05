@@ -98,6 +98,17 @@ internal object ScopedAgentBranchesTable : Table("scoped_agent_branches") {
     override val primaryKey = PrimaryKey(userId, agentId, branchId)
 }
 
+internal object ScopedUserProfileTable : Table("scoped_user_profile") {
+    val userId = varchar("user_id", 128)
+    val communicationStyle = varchar("communication_style", 32).default("concise")
+    val responseFormat = varchar("response_format", 32).default("markdown")
+    val restrictions = text("restrictions").default("[]")
+    val customInstructions = text("custom_instructions").default("")
+    val updatedAt = long("updated_at")
+
+    override val primaryKey = PrimaryKey(userId)
+}
+
 internal data class SearchCandidate(
     val messageId: AgentMessageId,
     val text: String,
