@@ -29,8 +29,19 @@ fun ConfigPanel(
     temperaturePlaceholder: String,
     modifier: Modifier = Modifier,
 ) {
+    var isExpanded by remember { mutableStateOf(false) }
+
     CyberpunkPanel(
         title = "CONFIG",
+        onHeaderClick = { isExpanded = !isExpanded },
+        showContent = isExpanded,
+        headerAction = {
+            Text(
+                text = if (isExpanded) "[-]" else "[+]",
+                style = MaterialTheme.typography.labelSmall,
+                color = CyberpunkColors.Yellow,
+            )
+        },
         modifier = modifier,
     ) {
         if (models.isNotEmpty()) {

@@ -17,6 +17,8 @@ class BuildSummaryPromptUseCase {
             appendLine("You maintain compressed memory for an assistant conversation.")
             appendLine("Write an updated summary using only facts from the provided data.")
             appendLine("Keep constraints, decisions, requirements, open questions, and pending tasks.")
+            appendLine("Prioritize preserving: user goals, stated preferences, technical decisions, task requirements, and any corrections the user made.")
+            appendLine("Do NOT discard information just because it seems minor — it may be referenced later.")
             appendLine("Remove repetition and chit-chat. Keep it concise.")
             appendLine()
             appendLine("EXISTING SUMMARY:")

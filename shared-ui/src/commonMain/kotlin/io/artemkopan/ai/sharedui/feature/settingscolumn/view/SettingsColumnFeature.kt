@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.artemkopan.ai.sharedcontract.*
 import io.artemkopan.ai.sharedui.feature.configpanel.view.ConfigPanelFeature
 import io.artemkopan.ai.sharedui.feature.configpanel.viewmodel.ConfigPanelViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
@@ -34,6 +35,15 @@ fun SettingsColumnFeature(
                 .padding(end = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            RuntimeInfoPanel(
+                contextConfig = agent.contextConfig,
+                contextTotalTokensLabel = state.contextTotalTokensLabel,
+                contextLeftLabel = state.contextLeftLabel,
+                runtimeOutputTokensLabel = state.runtimeOutputTokensLabel,
+                runtimeApiDurationLabel = state.runtimeApiDurationLabel,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             AgentModeSelector(
                 selected = agent.agentMode,
                 onModeSelected = settingsViewModel::onAgentModeChanged,
@@ -57,14 +67,6 @@ fun SettingsColumnFeature(
                 onDeleteBranch = settingsViewModel::onDeleteBranch,
                 modifier = Modifier.fillMaxWidth(),
             )
-
-            RuntimeInfoPanel(
-                contextTotalTokensLabel = state.contextTotalTokensLabel,
-                contextLeftLabel = state.contextLeftLabel,
-                runtimeOutputTokensLabel = state.runtimeOutputTokensLabel,
-                runtimeApiDurationLabel = state.runtimeApiDurationLabel,
-                modifier = Modifier.fillMaxWidth(),
-            )
         }
 
         VerticalScrollbar(
@@ -82,6 +84,7 @@ fun SettingsColumnFeature(
 
 @Composable
 private fun RuntimeInfoPanel(
+    contextConfig: AgentContextConfigDto,
     contextTotalTokensLabel: String,
     contextLeftLabel: String,
     runtimeOutputTokensLabel: String,
@@ -93,6 +96,11 @@ private fun RuntimeInfoPanel(
         accentColor = CyberpunkColors.Cyan,
         modifier = modifier,
     ) {
+        Text(
+            text = "memory model: ${memoryModelLabel(contextConfig)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = CyberpunkColors.Yellow,
+        )
         Text(
             text = "out tokens: $runtimeOutputTokensLabel",
             style = MaterialTheme.typography.bodySmall,
@@ -114,4 +122,12 @@ private fun RuntimeInfoPanel(
             color = CyberpunkColors.TextMuted,
         )
     }
+}
+
+private fun memoryModelLabel(contextConfig: AgentContextConfigDto): String = when (contextConfig) {
+    is FullHistoryContextConfigDto -> "FULL HISTORY"
+    is RollingSummaryContextConfigDto -> "ROLLING"
+    is SlidingWindowContextConfigDto -> "WINDOW"
+    is StickyFactsContextConfigDto -> "FACTS"
+    is BranchingContextConfigDto -> "BRANCHING"
 }

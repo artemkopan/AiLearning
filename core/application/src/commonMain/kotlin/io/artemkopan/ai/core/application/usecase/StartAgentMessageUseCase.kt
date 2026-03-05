@@ -1,12 +1,7 @@
 package io.artemkopan.ai.core.application.usecase
 
 import io.artemkopan.ai.core.application.error.AppError
-import io.artemkopan.ai.core.application.model.AssistantMemoryModel
-import io.artemkopan.ai.core.application.model.GenerateCommand
-import io.artemkopan.ai.core.application.model.LongTermMemoryLayer
-import io.artemkopan.ai.core.application.model.SendAgentMessageCommand
-import io.artemkopan.ai.core.application.model.ShortTermMemoryLayer
-import io.artemkopan.ai.core.application.model.WorkingMemoryLayer
+import io.artemkopan.ai.core.application.model.*
 import io.artemkopan.ai.core.application.usecase.context.ExtractAndPersistFactsUseCase
 import io.artemkopan.ai.core.application.usecase.context.PrepareAgentContextUseCase
 import io.artemkopan.ai.core.application.usecase.shortcut.ExpandStatsShortcutsInPromptUseCase
@@ -73,6 +68,20 @@ class StartAgentMessageUseCase(
         val persistedUserMessage = latestAgent.messages.firstOrNull { it.id == userMessage.id } ?: userMessage
 
         if (latestAgent.contextConfig is StickyFactsAgentContextConfig) {
+            val existingFacts = repository.getAgentFacts(domainUserId, agentId).getOrElse {
+                return Result.failure(it)
+            }
+            if (existingFacts?.factsJson.isNullOrBlank()) {
+                val seedMessage = latestAgent.messages.firstNonCommandUserMessage()
+                if (seedMessage != null && seedMessage.id != persistedUserMessage.id) {
+                    extractAndPersistFactsUseCase.execute(
+                        userId = domainUserId,
+                        agentId = agentId,
+                        agentModel = latestAgent.model,
+                        newUserMessage = seedMessage.text,
+                    ).getOrElse { return Result.failure(it) }
+                }
+            }
             extractAndPersistFactsUseCase.execute(
                 userId = domainUserId,
                 agentId = agentId,
@@ -164,3 +173,16 @@ class StartAgentMessageUseCase(
 
 private const val STATUS_PROCESSING = "processing"
 private const val STATUS_DONE = "done"
+
+private fun List<AgentMessage>.firstNonCommandUserMessage(): AgentMessage? {
+    return firstOrNull { message ->
+        message.role == AgentMessageRole.USER &&
+            message.text.trim().isNotEmpty() &&
+            !message.text.isSlashSingleToken()
+    }
+}
+
+private fun String.isSlashSingleToken(): Boolean {
+    val trimmed = trim()
+    return trimmed.startsWith("/") && !trimmed.contains(" ")
+}

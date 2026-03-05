@@ -20,6 +20,10 @@ class ExtractAndPersistFactsUseCase(
         agentModel: String,
         newUserMessage: String,
     ): Result<Unit> {
+        if (isTrivialMessage(newUserMessage)) {
+            return Result.success(Unit)
+        }
+
         val existingFacts = repository.getAgentFacts(userId, agentId)
             .getOrElse { return Result.failure(it) }
         val existingJson = existingFacts?.factsJson.orEmpty()
@@ -59,7 +63,19 @@ class ExtractAndPersistFactsUseCase(
         if (start < 0 || end < 0 || end <= start) return text
         return text.substring(start, end + 1)
     }
+
+    private fun isTrivialMessage(text: String): Boolean {
+        val trimmed = text.trim().lowercase()
+        if (trimmed.length < 4) return true
+        return trimmed in TRIVIAL_MESSAGES
+    }
 }
+
+private val TRIVIAL_MESSAGES = setOf(
+    "okay", "thanks", "thank you", "got it", "sure",
+    "yep", "yeps", "nope", "cool", "nice", "great",
+    "lol", "haha", "hmm", "alright",
+)
 
 private const val FACTS_TEMPERATURE = 0.2
 private const val FACTS_MAX_OUTPUT_TOKENS = 500

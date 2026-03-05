@@ -125,7 +125,18 @@ val applicationModule = module {
         )
     }
     single { SlidingWindowContextPreparationStrategy() }
-    single { StickyFactsContextPreparationStrategy() }
+    single {
+        val config = get<AppConfig>()
+        StickyFactsContextPreparationStrategy(
+            repository = get(),
+            generateTextUseCase = get(),
+            shouldSummarizeUseCase = get(),
+            buildSummaryPromptUseCase = get(),
+            persistContextSummaryUseCase = get(),
+            summaryMaxOutputTokens = config.contextSummaryMaxOutputTokens,
+            summaryModelOverride = config.contextSummaryModel,
+        )
+    }
     single { BranchingContextPreparationStrategy() }
     factory { BuildFactsExtractionPromptUseCase() }
     factory {
