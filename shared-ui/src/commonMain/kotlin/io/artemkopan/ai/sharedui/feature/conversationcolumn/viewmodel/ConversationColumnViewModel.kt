@@ -5,7 +5,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.artemkopan.ai.sharedui.core.session.AgentId
-import io.artemkopan.ai.sharedui.core.session.AgentSessionStore
 import io.artemkopan.ai.sharedui.feature.conversationcolumn.command.ConversationCommandContext
 import io.artemkopan.ai.sharedui.feature.conversationcolumn.command.ConversationCommandRegistry
 import io.artemkopan.ai.sharedui.feature.conversationcolumn.model.CommandPaletteUiModel
@@ -16,7 +15,8 @@ import kotlinx.coroutines.launch
 
 class ConversationColumnViewModel(
     private val agentId: AgentId,
-    private val sessionStore: AgentSessionStore,
+    private val observeAgentSliceUseCase: ObserveAgentSliceUseCase,
+    private val observeSessionStateUseCase: ObserveSessionStateUseCase,
     private val updateDraftMessageActionUseCase: UpdateDraftMessageActionUseCase,
     private val submitMessageActionUseCase: SubmitMessageActionUseCase,
     private val stopQueueActionUseCase: StopQueueActionUseCase,
@@ -34,7 +34,7 @@ class ConversationColumnViewModel(
 
     init {
         viewModelScope.launch {
-            sessionStore.observeAgent(agentId)
+            observeAgentSliceUseCase(agentId)
                 .map { slice -> slice?.agent?.draftMessage.orEmpty() }
                 .distinctUntilChanged()
                 .collect { draftMessage ->
@@ -51,8 +51,8 @@ class ConversationColumnViewModel(
     }
 
     val state: StateFlow<ConversationColumnUiModel> = combine(
-        sessionStore.observeAgent(agentId),
-        sessionStore.sessionState,
+        observeAgentSliceUseCase(agentId),
+        observeSessionStateUseCase(),
         messageInputValue,
         isCommandPaletteDismissed,
     ) { slice, session, inputValue, paletteDismissed ->

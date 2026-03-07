@@ -2,7 +2,6 @@ package io.artemkopan.ai.sharedui.feature.root.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.artemkopan.ai.sharedui.core.session.AgentSessionStore
 import io.artemkopan.ai.sharedui.feature.root.model.RootShortcutAction
 import io.artemkopan.ai.sharedui.feature.root.model.RootShortcutEvent
 import io.artemkopan.ai.sharedui.feature.root.model.RootUiModel
@@ -13,7 +12,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 class RootViewModel(
-    private val sessionStore: AgentSessionStore,
+    private val observeSessionStateUseCase: ObserveSessionStateUseCase,
+    private val disposeSessionUseCase: DisposeSessionUseCase,
     private val resolveRootShortcutActionUseCase: ResolveRootShortcutActionUseCase,
     private val submitFromActiveAgentActionUseCase: SubmitFromActiveAgentActionUseCase,
     private val createAgentActionUseCase: CreateAgentActionUseCase,
@@ -21,7 +21,7 @@ class RootViewModel(
     private val selectPreviousAgentActionUseCase: SelectPreviousAgentActionUseCase,
 ) : ViewModel() {
 
-    val state: StateFlow<RootUiModel> = sessionStore.sessionState
+    val state: StateFlow<RootUiModel> = observeSessionStateUseCase()
         .map { session ->
             RootUiModel(
                 agentOrder = session.agentOrder,
@@ -57,7 +57,7 @@ class RootViewModel(
     }
 
     override fun onCleared() {
-        sessionStore.dispose()
+        disposeSessionUseCase()
         super.onCleared()
     }
 }

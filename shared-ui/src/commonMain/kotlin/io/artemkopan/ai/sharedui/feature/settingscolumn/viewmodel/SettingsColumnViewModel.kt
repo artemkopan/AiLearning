@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
 import io.artemkopan.ai.sharedcontract.AgentMode
 import io.artemkopan.ai.sharedui.core.session.AgentId
-import io.artemkopan.ai.sharedui.core.session.AgentSessionStore
 import io.artemkopan.ai.sharedui.feature.settingscolumn.model.SettingsColumnUiModel
 import io.artemkopan.ai.sharedui.usecase.*
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,7 +14,7 @@ import kotlinx.coroutines.flow.stateIn
 
 class SettingsColumnViewModel(
     private val agentId: AgentId,
-    private val sessionStore: AgentSessionStore,
+    private val observeAgentSliceUseCase: ObserveAgentSliceUseCase,
     private val updateAgentModeActionUseCase: UpdateAgentModeActionUseCase,
     private val updateContextStrategyActionUseCase: UpdateContextStrategyActionUseCase,
     private val updateContextRecentMessagesActionUseCase: UpdateContextRecentMessagesActionUseCase,
@@ -26,7 +25,7 @@ class SettingsColumnViewModel(
     private val keepDigitsUseCase: KeepDigitsUseCase,
 ) : ViewModel() {
 
-    val state: StateFlow<SettingsColumnUiModel> = sessionStore.observeAgent(agentId)
+    val state: StateFlow<SettingsColumnUiModel> = observeAgentSliceUseCase(agentId)
         .map { slice ->
             val latestAssistant = slice?.agent?.messages?.lastOrNull { message ->
                 message.role == AgentMessageRoleDto.ASSISTANT &&

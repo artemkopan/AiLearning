@@ -1,7 +1,7 @@
 package io.artemkopan.ai.sharedui.di
 
 import io.artemkopan.ai.sharedui.core.session.AgentId
-import io.artemkopan.ai.sharedui.core.session.AgentSessionStore
+import io.artemkopan.ai.sharedui.core.session.AgentSessionController
 import io.artemkopan.ai.sharedui.feature.agentssidepanel.viewmodel.AgentsSidePanelViewModel
 import io.artemkopan.ai.sharedui.feature.configpanel.viewmodel.ConfigPanelViewModel
 import io.artemkopan.ai.sharedui.feature.conversationcolumn.viewmodel.ConversationColumnViewModel
@@ -16,12 +16,10 @@ import org.koin.ksp.generated.module
 
 val sharedUiFeatureModule = module {
     single {
-        AgentSessionStore(
+        AgentSessionController(
             gateway = get(),
-            normalizeModelUseCase = get(),
-            filterTemperatureInputUseCase = get(),
-            normalizeAgentsForConfigUseCase = get(),
             mapSnapshotToUiStateUseCase = get(),
+            normalizeAgentsForConfigUseCase = get(),
             observeActiveModelSelectionUseCase = get(),
             buildUpdatedConfigWithModelMetadataUseCase = get(),
             enrichRuntimeStateUseCase = get(),
@@ -30,7 +28,8 @@ val sharedUiFeatureModule = module {
 
     viewModel {
         RootViewModel(
-            sessionStore = get(),
+            observeSessionStateUseCase = get(),
+            disposeSessionUseCase = get(),
             resolveRootShortcutActionUseCase = get(),
             submitFromActiveAgentActionUseCase = get(),
             createAgentActionUseCase = get(),
@@ -40,7 +39,7 @@ val sharedUiFeatureModule = module {
     }
     viewModel {
         AgentsSidePanelViewModel(
-            sessionStore = get(),
+            observeSessionStateUseCase = get(),
             createAgentActionUseCase = get(),
             selectAgentActionUseCase = get(),
             closeAgentActionUseCase = get(),
@@ -49,14 +48,15 @@ val sharedUiFeatureModule = module {
     }
     viewModel {
         ErrorDialogViewModel(
-            sessionStore = get(),
+            observeErrorUseCase = get(),
             dismissErrorActionUseCase = get(),
         )
     }
     viewModel { (agentId: AgentId) ->
         ConversationColumnViewModel(
             agentId = agentId,
-            sessionStore = get(),
+            observeAgentSliceUseCase = get(),
+            observeSessionStateUseCase = get(),
             updateDraftMessageActionUseCase = get(),
             submitMessageActionUseCase = get(),
             stopQueueActionUseCase = get(),
@@ -72,7 +72,7 @@ val sharedUiFeatureModule = module {
     viewModel { (agentId: AgentId) ->
         SettingsColumnViewModel(
             agentId = agentId,
-            sessionStore = get(),
+            observeAgentSliceUseCase = get(),
             updateAgentModeActionUseCase = get(),
             updateContextStrategyActionUseCase = get(),
             updateContextRecentMessagesActionUseCase = get(),
@@ -85,14 +85,14 @@ val sharedUiFeatureModule = module {
     }
     viewModel {
         UserProfileViewModel(
-            sessionStore = get(),
+            observeUserProfileUseCase = get(),
             updateUserProfileActionUseCase = get(),
         )
     }
     viewModel { (agentId: AgentId) ->
         ConfigPanelViewModel(
             agentId = agentId,
-            sessionStore = get(),
+            observeAgentSliceUseCase = get(),
             updateModelActionUseCase = get(),
             updateMaxOutputTokensActionUseCase = get(),
             updateTemperatureActionUseCase = get(),

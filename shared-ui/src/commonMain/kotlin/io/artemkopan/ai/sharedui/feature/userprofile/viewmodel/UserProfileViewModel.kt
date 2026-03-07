@@ -2,21 +2,21 @@ package io.artemkopan.ai.sharedui.feature.userprofile.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.artemkopan.ai.sharedui.core.session.AgentSessionStore
 import io.artemkopan.ai.sharedui.feature.userprofile.model.ProfilePreset
 import io.artemkopan.ai.sharedui.feature.userprofile.model.UserProfileUiModel
+import io.artemkopan.ai.sharedui.usecase.ObserveUserProfileUseCase
 import io.artemkopan.ai.sharedui.usecase.UpdateUserProfileActionUseCase
 import kotlinx.coroutines.flow.*
 
 class UserProfileViewModel(
-    private val sessionStore: AgentSessionStore,
+    private val observeUserProfileUseCase: ObserveUserProfileUseCase,
     private val updateUserProfileActionUseCase: UpdateUserProfileActionUseCase,
 ) : ViewModel() {
 
     private val _localEdits = MutableStateFlow<UserProfileUiModel?>(null)
 
     val state: StateFlow<UserProfileUiModel> = combine(
-        sessionStore.observeUserProfile(),
+        observeUserProfileUseCase(),
         _localEdits,
     ) { serverProfile, localEdits ->
         if (localEdits != null) {

@@ -3,27 +3,23 @@ package io.artemkopan.ai.sharedui.feature.agentssidepanel.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.artemkopan.ai.sharedui.core.session.AgentId
-import io.artemkopan.ai.sharedui.core.session.AgentSessionStore
 import io.artemkopan.ai.sharedui.feature.agentssidepanel.model.AgentsSidePanelItemModel
 import io.artemkopan.ai.sharedui.feature.agentssidepanel.model.AgentsSidePanelUiModel
-import io.artemkopan.ai.sharedui.usecase.CloseAgentActionUseCase
-import io.artemkopan.ai.sharedui.usecase.CreateAgentActionUseCase
-import io.artemkopan.ai.sharedui.usecase.FormatAgentTitleUseCase
-import io.artemkopan.ai.sharedui.usecase.SelectAgentActionUseCase
+import io.artemkopan.ai.sharedui.usecase.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 class AgentsSidePanelViewModel(
-    private val sessionStore: AgentSessionStore,
+    private val observeSessionStateUseCase: ObserveSessionStateUseCase,
     private val createAgentActionUseCase: CreateAgentActionUseCase,
     private val selectAgentActionUseCase: SelectAgentActionUseCase,
     private val closeAgentActionUseCase: CloseAgentActionUseCase,
     private val formatAgentTitleUseCase: FormatAgentTitleUseCase,
 ) : ViewModel() {
 
-    val state: StateFlow<AgentsSidePanelUiModel> = sessionStore.sessionState
+    val state: StateFlow<AgentsSidePanelUiModel> = observeSessionStateUseCase()
         .map { session ->
             AgentsSidePanelUiModel(
                 agents = session.agentOrder.mapNotNull { id ->
