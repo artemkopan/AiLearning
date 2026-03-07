@@ -16,6 +16,8 @@ import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
 import io.artemkopan.ai.sharedcontract.BranchingContextConfigDto
 import io.artemkopan.ai.sharedui.core.session.AgentMessageState
 import io.artemkopan.ai.sharedui.feature.conversationcolumn.viewmodel.ConversationColumnViewModel
+import io.artemkopan.ai.sharedui.feature.taskstatemanager.view.TaskStateManagerFeature
+import io.artemkopan.ai.sharedui.feature.taskstatemanager.viewmodel.TaskStateManagerViewModel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkPanel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkTextField
 import io.artemkopan.ai.sharedui.ui.component.StatusPanel
@@ -25,6 +27,7 @@ import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 @Composable
 fun ConversationColumnFeature(
     viewModel: ConversationColumnViewModel,
+    taskStateManagerViewModel: TaskStateManagerViewModel?,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
@@ -128,10 +131,18 @@ fun ConversationColumnFeature(
             )
         }
 
+        if (taskStateManagerViewModel != null) {
+            TaskStateManagerFeature(
+                viewModel = taskStateManagerViewModel,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         state.statusText?.let { status ->
             StatusPanel(
                 status = status,
                 modifier = Modifier.fillMaxWidth(),
+                showSpinner = agent.isLoading,
             )
         }
     }

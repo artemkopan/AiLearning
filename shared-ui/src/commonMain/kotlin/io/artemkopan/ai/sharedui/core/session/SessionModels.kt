@@ -90,6 +90,7 @@ data class SessionState(
     val queuedByAgent: Map<AgentId, List<QueuedMessageState>> = emptyMap(),
     val isConnected: Boolean = false,
     val userProfile: UserProfileState = UserProfileState(),
+    val taskByAgent: Map<AgentId, TaskState> = emptyMap(),
 )
 
 data class AgentSessionSlice(
@@ -105,6 +106,23 @@ data class UserProfileState(
     val responseFormat: String = "markdown",
     val restrictions: List<String> = emptyList(),
     val customInstructions: String = "",
+)
+
+data class TaskStepState(
+    val index: Int,
+    val phase: String,
+    val description: String,
+    val expectedAction: String,
+    val status: String,
+    val result: String = "",
+)
+
+data class TaskState(
+    val id: String,
+    val title: String,
+    val currentPhase: String,
+    val steps: List<TaskStepState>,
+    val currentStepIndex: Int,
 )
 
 const val STATUS_PROCESSING = "processing"

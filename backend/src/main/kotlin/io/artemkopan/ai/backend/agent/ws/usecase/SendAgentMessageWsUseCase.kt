@@ -1,16 +1,14 @@
 package io.artemkopan.ai.backend.agent.ws.usecase
 
+import io.artemkopan.ai.backend.agent.ws.AgentWsMapper
 import io.artemkopan.ai.backend.agent.ws.AgentWsOutboundService
 import io.artemkopan.ai.backend.agent.ws.AgentWsProcessingRegistry
 import io.artemkopan.ai.core.application.model.SendAgentMessageCommand
 import io.artemkopan.ai.core.application.usecase.*
-import io.artemkopan.ai.core.application.usecase.shortcut.LONG_TERM_TOKEN
-import io.artemkopan.ai.core.application.usecase.shortcut.MemoryLayerType
-import io.artemkopan.ai.core.application.usecase.shortcut.ParseMemoryLayerShortcutTokenUseCase
-import io.artemkopan.ai.core.application.usecase.shortcut.SHORT_TERM_TOKEN
-import io.artemkopan.ai.core.application.usecase.shortcut.WORKING_TOKEN
-import io.artemkopan.ai.core.application.usecase.shortcut.ParseStatsShortcutTokensUseCase
-import io.artemkopan.ai.core.application.usecase.shortcut.ResolveStatsShortcutsUseCase
+import io.artemkopan.ai.core.application.usecase.shortcut.*
+import io.artemkopan.ai.core.application.usecase.task.CreateTaskUseCase
+import io.artemkopan.ai.core.application.usecase.task.GetActiveTaskUseCase
+import io.artemkopan.ai.core.application.usecase.task.TransitionTaskPhaseUseCase
 import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.sharedcontract.SendAgentMessageCommandDto
@@ -32,6 +30,10 @@ class SendAgentMessageWsUseCase(
     private val resolveStatsShortcutsUseCase: ResolveStatsShortcutsUseCase,
     private val switchAgentMemoryLayerUseCase: SwitchAgentMemoryLayerUseCase,
     private val agentRepository: AgentRepository,
+    private val getActiveTaskUseCase: GetActiveTaskUseCase,
+    private val createTaskUseCase: CreateTaskUseCase,
+    private val transitionTaskPhaseUseCase: TransitionTaskPhaseUseCase,
+    private val mapper: AgentWsMapper,
     private val outboundService: AgentWsOutboundService,
     private val logger: Logger = LoggerFactory.getLogger(SendAgentMessageWsUseCase::class.java),
 ) : AgentWsMessageUseCase<SendAgentMessageCommandDto> {
@@ -59,6 +61,8 @@ class SendAgentMessageWsUseCase(
             return Result.success(Unit)
         }
 
+        ensureActiveTaskExists(context, message)
+
         startAgentMessageUseCase.execute(
             context.userScope,
             SendAgentMessageCommand(
@@ -85,7 +89,10 @@ class SendAgentMessageWsUseCase(
                                         latencyMs = latencyMs,
                                     )
                                 )
-                                    .onSuccess { state -> outboundService.broadcastSnapshot(context.userScope, state) }
+                                    .onSuccess { state ->
+                                        outboundService.broadcastSnapshot(context.userScope, state)
+                                        advanceTaskPhaseAfterCompletion(context, started.agentId.value)
+                                    }
                                     .onFailure { throwable ->
                                         markProcessingFailed(
                                             userScope = context.userScope,
@@ -150,6 +157,62 @@ class SendAgentMessageWsUseCase(
             .onFailure { throwable -> outboundService.sendOperationFailure(context.session, throwable, message.requestId) }
 
         return Result.success(Unit)
+    }
+
+    private suspend fun advanceTaskPhaseAfterCompletion(context: AgentWsMessageContext, agentId: String) {
+        val task = getActiveTaskUseCase.execute(context.userScope, agentId).getOrNull() ?: return
+        if (task.currentPhase == TaskPhase.PAUSED || task.currentPhase == TaskPhase.DONE) return
+
+        val nextPhase = when (task.currentPhase) {
+            TaskPhase.PLANNING -> TaskPhase.EXECUTION
+            TaskPhase.EXECUTION -> TaskPhase.VALIDATION
+            TaskPhase.VALIDATION -> TaskPhase.DONE
+            TaskPhase.DONE, TaskPhase.PAUSED -> return
+        }
+
+        transitionTaskPhaseUseCase.execute(
+            userId = context.userScope,
+            taskId = task.id.value,
+            fromPhase = task.currentPhase,
+            targetPhase = nextPhase,
+            reason = "Assistant message completed",
+        ).onSuccess {
+            val updatedTask = getActiveTaskUseCase.execute(context.userScope, agentId).getOrNull()
+            if (updatedTask != null) {
+                outboundService.broadcastTaskStateSnapshot(
+                    userScope = context.userScope,
+                    payload = mapper.toTaskStateSnapshot(updatedTask),
+                )
+            }
+        }
+    }
+
+    private suspend fun ensureActiveTaskExists(
+        context: AgentWsMessageContext,
+        message: SendAgentMessageCommandDto,
+    ) {
+        val activeTask = getActiveTaskUseCase.execute(context.userScope, message.agentId).getOrNull()
+        if (activeTask != null) return
+
+        val defaultSteps = listOf(
+            TaskStep(0, TaskPhase.PLANNING, "Plan approach", "Analyze and plan", TaskStepStatus.PENDING),
+            TaskStep(1, TaskPhase.EXECUTION, "Execute", "Implement", TaskStepStatus.PENDING),
+            TaskStep(2, TaskPhase.VALIDATION, "Validate", "Verify", TaskStepStatus.PENDING),
+            TaskStep(3, TaskPhase.DONE, "Complete", "Done", TaskStepStatus.PENDING),
+        )
+        val title = message.text.trim().take(MAX_TASK_TITLE_LENGTH).ifBlank { "Task" }
+
+        createTaskUseCase.execute(
+            userId = context.userScope,
+            agentId = message.agentId,
+            title = title,
+            steps = defaultSteps,
+        ).onSuccess { task ->
+            outboundService.broadcastTaskStateSnapshot(
+                userScope = context.userScope,
+                payload = mapper.toTaskStateSnapshot(task),
+            )
+        }
     }
 
     private suspend fun markProcessingFailed(
@@ -314,3 +377,4 @@ class SendAgentMessageWsUseCase(
 
 private const val STATUS_DONE = "done"
 private const val NO_AGENT_STATS_MESSAGE = "No agent stats available."
+private const val MAX_TASK_TITLE_LENGTH = 64

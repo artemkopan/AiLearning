@@ -1,10 +1,20 @@
 # Stage 2: Task State Machine
 
+## Status: IMPLEMENTED
+
 ## Goal
 Implement task execution as a formal state machine with phases: planning → execution → validation → done. Support pausing at any stage and resuming without repeating explanations.
 
 ## Result
 An agent with formalized task state. The assistant knows which phase it's in, what step to do next, and what's already been completed.
+
+## Architecture Notes (corrections from original spec)
+1. **Domain layer has no serialization dependency** — `@Serializable` annotations removed from domain models. Backend uses `TaskStepSerializer.kt` helper for JSON column storage.
+2. **Operations use `Lazy<T>` parameters** — following `GetUserProfileOperation`/`UpsertUserProfileOperation` pattern.
+3. **No `sendToSession()` on outbound service** — WS use cases send directly via `context.session.send(Frame.Text(...))`.
+4. **`nowMillis()`** — operations use `runtime.value.nowMillis()`, not `System.currentTimeMillis()`.
+5. **KSP annotations** — WS use cases use `@Factory(binds = [...])`, operations use `@Single`.
+6. **UI layer added** — `TaskStateSnapshotDto` handled in `AgentSessionController`, displayed in conversation column with `TaskStatePanel`.
 
 ---
 

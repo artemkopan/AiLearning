@@ -13,6 +13,7 @@ import io.artemkopan.ai.core.application.usecase.shortcut.ParseStatsShortcutToke
 import io.artemkopan.ai.core.application.usecase.shortcut.ResolveStatsShortcutsUseCase
 import io.artemkopan.ai.core.application.usecase.stats.BuildAgentStatsSnippetUseCase
 import io.artemkopan.ai.core.application.usecase.stats.GetAgentStatsUseCase
+import io.artemkopan.ai.core.application.usecase.task.*
 import io.artemkopan.ai.core.data.client.DeepSeekNetworkClient
 import io.artemkopan.ai.core.data.client.LlmNetworkClient
 import io.artemkopan.ai.core.data.repository.DefaultLlmRepository
@@ -208,6 +209,8 @@ val applicationModule = module {
             extractAndPersistFactsUseCase = get(),
             getUserProfileUseCase = get(),
             buildUserProfilePromptSnippetUseCase = get(),
+            getActiveTaskUseCase = get(),
+            buildTaskStatePromptSnippetUseCase = get(),
         )
     }
     factory {
@@ -222,6 +225,11 @@ val applicationModule = module {
     factory { GetUserProfileUseCase(repository = get()) }
     factory { UpdateUserProfileUseCase(repository = get()) }
     factory { BuildUserProfilePromptSnippetUseCase() }
+    factory { GetActiveTaskUseCase(repository = get()) }
+    factory { CreateTaskUseCase(repository = get()) }
+    factory { TransitionTaskPhaseUseCase(repository = get()) }
+    factory { UpdateTaskStepUseCase(repository = get()) }
+    factory { BuildTaskStatePromptSnippetUseCase() }
     factory { MapFailureToUserMessageUseCase() }
 }
 

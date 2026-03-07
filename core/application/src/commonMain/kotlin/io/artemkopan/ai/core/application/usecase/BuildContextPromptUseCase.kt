@@ -34,12 +34,13 @@ class BuildContextPromptUseCase {
         val shortTerm = memory.shortTerm.dialogueTurns
             .filter { !it.status.equals(STATUS_STOPPED, ignoreCase = true) }
         val workingSummary = memory.working.taskDataSummary.trim()
+        val taskState = memory.working.taskStateSnippet.trim()
         val longTermProfile = memory.longTerm.profileAndDecisions.trim()
         val retrievedMemory = memory.longTerm.retrievedKnowledge
 
         val userProfileText = memory.longTerm.userProfileSnippet.trim()
 
-        if (workingSummary.isBlank() && shortTerm.isEmpty() && longTermProfile.isBlank()
+        if (workingSummary.isBlank() && taskState.isBlank() && shortTerm.isEmpty() && longTermProfile.isBlank()
             && retrievedMemory.isEmpty() && userProfileText.isBlank()) return ""
 
         return buildString {
@@ -54,6 +55,12 @@ class BuildContextPromptUseCase {
                 appendLine()
                 appendLine("WORKING MEMORY (CURRENT TASK DATA):")
                 appendLine(workingSummary)
+            }
+
+            if (taskState.isNotBlank()) {
+                appendLine()
+                appendLine("WORKING MEMORY (TASK STATE MACHINE):")
+                appendLine(taskState)
             }
 
             if (longTermProfile.isNotBlank()) {

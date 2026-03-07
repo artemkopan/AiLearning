@@ -116,6 +116,29 @@ internal data class SearchCandidate(
     val createdAt: Long,
 )
 
+internal object ScopedAgentTasksTable : Table("scoped_agent_tasks") {
+    val userId = varchar("user_id", 128)
+    val taskId = varchar("task_id", 64)
+    val agentId = varchar("agent_id", 64)
+    val title = varchar("title", 512)
+    val currentPhase = varchar("current_phase", 32)
+    val currentStepIndex = integer("current_step_index").default(0)
+    val stepsJson = text("steps_json")
+    val createdAt = long("created_at")
+    val updatedAt = long("updated_at")
+
+    override val primaryKey = PrimaryKey(userId, taskId)
+}
+
+internal object ScopedAgentTaskTransitionsTable : Table("scoped_agent_task_transitions") {
+    val userId = varchar("user_id", 128)
+    val taskId = varchar("task_id", 64)
+    val fromPhase = varchar("from_phase", 32)
+    val toPhase = varchar("to_phase", 32)
+    val reason = text("reason")
+    val timestamp = long("timestamp")
+}
+
 internal const val MAIN_BRANCH_ID = "main"
 internal const val MAX_TITLE_LENGTH = 20
 internal const val STATUS_DONE = "done"

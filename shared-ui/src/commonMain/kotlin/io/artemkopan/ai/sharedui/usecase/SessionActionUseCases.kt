@@ -371,6 +371,57 @@ private fun previousAgentId(order: List<AgentId>, activeAgentId: AgentId?): Agen
     return order[(currentIndex - 1 + order.size) % order.size]
 }
 
+@Factory
+class PauseTaskActionUseCase(
+    private val controller: AgentSessionController,
+) {
+    operator fun invoke(agentId: AgentId) {
+        val state = controller.getState()
+        val task = state.taskByAgent[agentId] ?: return
+        if (task.currentPhase.equals(PHASE_PAUSED, ignoreCase = true) ||
+            task.currentPhase.equals(PHASE_DONE, ignoreCase = true)
+        ) return
+
+        controller.stopQueue(agentId)
+
+        controller.sendCommand {
+            TransitionTaskPhaseCommandDto(
+                agentId = agentId.value,
+                taskId = task.id,
+                fromPhase = task.currentPhase,
+                targetPhase = PHASE_PAUSED,
+                reason = "User paused task",
+            )
+        }
+    }
+}
+
+@Factory
+class ResumeTaskActionUseCase(
+    private val controller: AgentSessionController,
+) {
+    operator fun invoke(agentId: AgentId) {
+        val task = controller.getState().taskByAgent[agentId] ?: return
+        if (!task.currentPhase.equals(PHASE_PAUSED, ignoreCase = true)) return
+
+        val resumePhase = task.steps.getOrNull(task.currentStepIndex)?.phase ?: PHASE_PLANNING
+
+        controller.sendCommand {
+            TransitionTaskPhaseCommandDto(
+                agentId = agentId.value,
+                taskId = task.id,
+                fromPhase = PHASE_PAUSED,
+                targetPhase = resumePhase,
+                reason = "User resumed task",
+            )
+        }
+    }
+}
+
+private const val PHASE_PAUSED = "paused"
+private const val PHASE_DONE = "done"
+private const val PHASE_PLANNING = "planning"
+
 private const val STRATEGY_FULL_HISTORY = "full_history"
 private const val STRATEGY_SLIDING_WINDOW = "sliding_window"
 private const val STRATEGY_STICKY_FACTS = "sticky_facts"

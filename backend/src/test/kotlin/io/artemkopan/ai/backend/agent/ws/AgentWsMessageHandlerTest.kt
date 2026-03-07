@@ -99,6 +99,10 @@ private fun buildCompleteHandlerMap(
         NoopUseCase(CreateBranchCommandDto::class),
         NoopUseCase(SwitchBranchCommandDto::class),
         NoopUseCase(DeleteBranchCommandDto::class),
+        NoopUseCase(UpdateUserProfileCommandDto::class),
+        NoopUseCase(CreateTaskCommandDto::class),
+        NoopUseCase(TransitionTaskPhaseCommandDto::class),
+        NoopUseCase(UpdateTaskStepCommandDto::class),
     ).associateBy { it.messageType }
 }
 

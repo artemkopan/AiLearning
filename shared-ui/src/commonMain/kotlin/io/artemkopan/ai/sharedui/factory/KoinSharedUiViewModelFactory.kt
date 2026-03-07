@@ -8,6 +8,7 @@ import io.artemkopan.ai.sharedui.feature.conversationcolumn.viewmodel.Conversati
 import io.artemkopan.ai.sharedui.feature.errordialog.viewmodel.ErrorDialogViewModel
 import io.artemkopan.ai.sharedui.feature.root.viewmodel.RootViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
+import io.artemkopan.ai.sharedui.feature.taskstatemanager.viewmodel.TaskStateManagerViewModel
 import io.artemkopan.ai.sharedui.feature.userprofile.viewmodel.UserProfileViewModel
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.annotation.Single
@@ -41,6 +42,14 @@ class KoinSharedUiViewModelFactory : SharedUiViewModelFactory {
     override fun config(agentId: AgentId): ConfigPanelViewModel {
         return koinViewModel(
             key = "config-${agentId.value}",
+            parameters = { parametersOf(agentId) },
+        )
+    }
+
+    @Composable
+    override fun taskStateManager(agentId: AgentId): TaskStateManagerViewModel {
+        return koinViewModel(
+            key = "task-state-manager-${agentId.value}",
             parameters = { parametersOf(agentId) },
         )
     }

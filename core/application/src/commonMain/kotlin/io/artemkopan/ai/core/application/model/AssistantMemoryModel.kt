@@ -15,6 +15,7 @@ data class ShortTermMemoryLayer(
 
 data class WorkingMemoryLayer(
     val taskDataSummary: String,
+    val taskStateSnippet: String = "",
 )
 
 data class LongTermMemoryLayer(

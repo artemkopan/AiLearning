@@ -55,6 +55,8 @@ internal class PostgresDbRuntime(
                     ScopedAgentFactsTable,
                     ScopedAgentBranchesTable,
                     ScopedUserProfileTable,
+                    ScopedAgentTasksTable,
+                    ScopedAgentTaskTransitionsTable,
                 )
             }
             initialized = true

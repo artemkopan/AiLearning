@@ -64,6 +64,8 @@ class KoinModulesVerifyTest {
                 AppConfig::class,
                 LlmRepository::class,
                 AgentRepository::class,
+                io.artemkopan.ai.core.domain.repository.UserProfileRepository::class,
+                io.artemkopan.ai.core.domain.repository.TaskRepository::class,
                 Boolean::class,
             )
         )

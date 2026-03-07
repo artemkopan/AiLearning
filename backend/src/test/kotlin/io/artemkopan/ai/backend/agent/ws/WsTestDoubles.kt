@@ -3,6 +3,8 @@ package io.artemkopan.ai.backend.agent.ws
 import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
 import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
+import io.artemkopan.ai.core.domain.repository.TaskRepository
+import io.artemkopan.ai.sharedcontract.TaskStateSnapshotDto
 import io.ktor.server.websocket.*
 import kotlinx.serialization.json.Json
 import java.lang.reflect.Proxy
@@ -58,8 +60,13 @@ open class RecordingOutboundService : AgentWsOutboundService(
 ) {
     val snapshots = mutableListOf<AgentState>()
     val broadcasts = mutableListOf<Pair<String, AgentState>>()
+    val taskStateBroadcasts = mutableListOf<Pair<String, TaskStateSnapshotDto>>()
     val errors = mutableListOf<Pair<String?, String>>()
     val operationFailures = mutableListOf<Pair<String?, Throwable>>()
+
+    override suspend fun broadcastTaskStateSnapshot(userScope: String, payload: TaskStateSnapshotDto) {
+        taskStateBroadcasts += userScope to payload
+    }
 
     override suspend fun sendSnapshot(session: DefaultWebSocketServerSession, state: AgentState) {
         snapshots += state
@@ -175,5 +182,39 @@ class FakeAgentRepository(
 
     private fun <T> unsupported(): Result<T> {
         return Result.failure(UnsupportedOperationException("Not implemented for this test"))
+    }
+}
+
+class FakeTaskRepository(
+    var activeTask: AgentTask? = null,
+) : TaskRepository {
+    val phaseUpdates = mutableListOf<Pair<TaskId, TaskPhase>>()
+    val transitions = mutableListOf<TaskPhaseTransition>()
+
+    override suspend fun getActiveTask(userId: UserId, agentId: AgentId): Result<AgentTask?> =
+        Result.success(activeTask?.takeIf { it.agentId == agentId })
+
+    override suspend fun upsertTask(userId: UserId, task: AgentTask): Result<Unit> {
+        activeTask = task
+        return Result.success(Unit)
+    }
+
+    override suspend fun updateTaskPhase(userId: UserId, taskId: TaskId, phase: TaskPhase, updatedAt: Long): Result<Unit> {
+        phaseUpdates += taskId to phase
+        activeTask = activeTask?.let { if (it.id == taskId) it.copy(currentPhase = phase, updatedAt = updatedAt) else it }
+        return Result.success(Unit)
+    }
+
+    override suspend fun updateTaskStep(
+        userId: UserId,
+        taskId: TaskId,
+        stepIndex: Int,
+        status: TaskStepStatus,
+        result: String,
+    ): Result<Unit> = Result.success(Unit)
+
+    override suspend fun appendTransition(userId: UserId, transition: TaskPhaseTransition): Result<Unit> {
+        transitions += transition
+        return Result.success(Unit)
     }
 }

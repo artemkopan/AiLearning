@@ -4,6 +4,7 @@ import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
 import io.artemkopan.ai.core.domain.model.AgentState
 import io.artemkopan.ai.sharedcontract.AgentOperationFailedDto
 import io.artemkopan.ai.sharedcontract.AgentWsServerMessageDto
+import io.artemkopan.ai.sharedcontract.TaskStateSnapshotDto
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.serialization.json.Json
@@ -44,6 +45,22 @@ open class AgentWsOutboundService(
         val message = mapFailureToUserMessageUseCase.execute(throwable)
             .getOrDefault(throwable.message ?: "Unexpected error")
         sendError(session, message, requestId)
+    }
+
+    open suspend fun sendTaskStateSnapshot(
+        session: DefaultWebSocketServerSession,
+        payload: TaskStateSnapshotDto,
+    ) {
+        session.send(
+            Frame.Text(json.encodeToString(AgentWsServerMessageDto.serializer(), payload)),
+        )
+    }
+
+    open suspend fun broadcastTaskStateSnapshot(userScope: String, payload: TaskStateSnapshotDto) {
+        sessionRegistry.broadcast(
+            userScope = userScope,
+            text = json.encodeToString(AgentWsServerMessageDto.serializer(), payload),
+        )
     }
 
     open suspend fun sendError(

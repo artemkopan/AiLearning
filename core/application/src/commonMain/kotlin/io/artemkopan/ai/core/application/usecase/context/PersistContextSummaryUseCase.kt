@@ -4,6 +4,7 @@ import io.artemkopan.ai.core.domain.model.AgentContextMemory
 import io.artemkopan.ai.core.domain.model.AgentId
 import io.artemkopan.ai.core.domain.model.UserId
 import io.artemkopan.ai.core.domain.repository.AgentRepository
+import kotlinx.datetime.Clock
 
 class PersistContextSummaryUseCase(
     private val repository: AgentRepository,
@@ -20,7 +21,7 @@ class PersistContextSummaryUseCase(
                 agentId = agentId,
                 summaryText = summaryText,
                 summarizedUntilCreatedAt = summarizedUntilCreatedAt,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = Clock.System.now().toEpochMilliseconds(),
             )
         )
     }

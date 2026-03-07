@@ -85,6 +85,10 @@ class AgentWsCommandUseCasesTest {
                 resolveStatsShortcutsUseCase = koinApp.koin.get<ResolveStatsShortcutsUseCase>(),
                 switchAgentMemoryLayerUseCase = koinApp.koin.get<SwitchAgentMemoryLayerUseCase>(),
                 agentRepository = koinApp.koin.get(),
+                getActiveTaskUseCase = koinApp.koin.get(),
+                createTaskUseCase = koinApp.koin.get(),
+                transitionTaskPhaseUseCase = koinApp.koin.get(),
+                mapper = koinApp.koin.get(),
                 outboundService = outbound,
             )
 

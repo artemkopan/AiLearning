@@ -105,6 +105,57 @@ data class UpdateUserProfileCommandDto(
 ) : AgentWsClientMessageDto
 
 @Serializable
+@SerialName("create_task")
+data class CreateTaskCommandDto(
+    val agentId: String,
+    val title: String,
+    val steps: List<TaskStepDto>,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("transition_task_phase")
+data class TransitionTaskPhaseCommandDto(
+    val agentId: String,
+    val taskId: String,
+    val fromPhase: String,
+    val targetPhase: String,
+    val reason: String = "",
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("update_task_step")
+data class UpdateTaskStepCommandDto(
+    val agentId: String,
+    val taskId: String,
+    val stepIndex: Int,
+    val status: String,
+    val result: String = "",
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+data class TaskDto(
+    val id: String,
+    val agentId: String,
+    val title: String,
+    val currentPhase: String,
+    val steps: List<TaskStepDto>,
+    val currentStepIndex: Int,
+)
+
+@Serializable
+data class TaskStepDto(
+    val index: Int,
+    val phase: String,
+    val description: String,
+    val expectedAction: String,
+    val status: String,
+    val result: String = "",
+)
+
+@Serializable
 data class BranchDto(
     val id: String,
     val name: String,
@@ -135,6 +186,13 @@ data class UserProfileSnapshotDto(
     val responseFormat: String,
     val restrictions: List<String>,
     val customInstructions: String,
+) : AgentWsServerMessageDto
+
+@Serializable
+@SerialName("task_state_snapshot")
+data class TaskStateSnapshotDto(
+    val agentId: String,
+    val task: TaskDto?,
 ) : AgentWsServerMessageDto
 
 @Serializable

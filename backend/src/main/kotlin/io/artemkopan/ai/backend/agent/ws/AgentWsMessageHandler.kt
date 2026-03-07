@@ -111,5 +111,8 @@ private fun AgentWsClientMessageDto.requestIdOrNull(): String? {
         is SwitchBranchCommandDto -> requestId
         is DeleteBranchCommandDto -> requestId
         is UpdateUserProfileCommandDto -> requestId
+        is CreateTaskCommandDto -> requestId
+        is TransitionTaskPhaseCommandDto -> requestId
+        is UpdateTaskStepCommandDto -> requestId
     }
 }

@@ -5,6 +5,8 @@ import io.artemkopan.ai.core.application.model.*
 import io.artemkopan.ai.core.application.usecase.context.ExtractAndPersistFactsUseCase
 import io.artemkopan.ai.core.application.usecase.context.PrepareAgentContextUseCase
 import io.artemkopan.ai.core.application.usecase.shortcut.ExpandStatsShortcutsInPromptUseCase
+import io.artemkopan.ai.core.application.usecase.task.BuildTaskStatePromptSnippetUseCase
+import io.artemkopan.ai.core.application.usecase.task.GetActiveTaskUseCase
 import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import kotlin.random.Random
@@ -26,6 +28,8 @@ class StartAgentMessageUseCase(
     private val extractAndPersistFactsUseCase: ExtractAndPersistFactsUseCase,
     private val getUserProfileUseCase: GetUserProfileUseCase,
     private val buildUserProfilePromptSnippetUseCase: BuildUserProfilePromptSnippetUseCase,
+    private val getActiveTaskUseCase: GetActiveTaskUseCase,
+    private val buildTaskStatePromptSnippetUseCase: BuildTaskStatePromptSnippetUseCase,
 ) {
     suspend fun execute(userId: String, command: SendAgentMessageCommand): Result<StartedAgentMessage> {
         val domainUserId = parseUserIdOrError(userId).getOrElse { return Result.failure(it) }
@@ -121,6 +125,9 @@ class StartAgentMessageUseCase(
         val userProfile = getUserProfileUseCase.execute(userId).getOrNull()
         val userProfileSnippet = buildUserProfilePromptSnippetUseCase.execute(userProfile)
 
+        val activeTask = getActiveTaskUseCase.execute(userId, command.agentId).getOrNull()
+        val taskStateSnippet = buildTaskStatePromptSnippetUseCase.execute(activeTask)
+
         val conversationPrompt = buildContextPromptUseCase.execute(
             AssistantMemoryModel(
                 shortTerm = ShortTermMemoryLayer(
@@ -128,6 +135,7 @@ class StartAgentMessageUseCase(
                 ),
                 working = WorkingMemoryLayer(
                     taskDataSummary = preparedContext.summaryText,
+                    taskStateSnippet = taskStateSnippet,
                 ),
                 longTerm = LongTermMemoryLayer(
                     profileAndDecisions = agentFacts?.factsJson.orEmpty(),

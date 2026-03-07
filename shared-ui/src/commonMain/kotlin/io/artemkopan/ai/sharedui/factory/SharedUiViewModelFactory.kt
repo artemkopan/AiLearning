@@ -8,6 +8,7 @@ import io.artemkopan.ai.sharedui.feature.conversationcolumn.viewmodel.Conversati
 import io.artemkopan.ai.sharedui.feature.errordialog.viewmodel.ErrorDialogViewModel
 import io.artemkopan.ai.sharedui.feature.root.viewmodel.RootViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
+import io.artemkopan.ai.sharedui.feature.taskstatemanager.viewmodel.TaskStateManagerViewModel
 import io.artemkopan.ai.sharedui.feature.userprofile.viewmodel.UserProfileViewModel
 
 interface SharedUiViewModelFactory {
@@ -28,6 +29,9 @@ interface SharedUiViewModelFactory {
 
     @Composable
     fun errorDialog(): ErrorDialogViewModel
+
+    @Composable
+    fun taskStateManager(agentId: AgentId): TaskStateManagerViewModel
 
     @Composable
     fun userProfile(): UserProfileViewModel

@@ -5,6 +5,7 @@ import io.artemkopan.ai.core.domain.model.AgentMessageId
 import io.artemkopan.ai.core.domain.model.UserId
 import io.artemkopan.ai.core.domain.repository.AgentRepository
 import io.artemkopan.ai.core.domain.repository.LlmRepository
+import kotlinx.datetime.Clock
 
 class IndexMessageEmbeddingsUseCase(
     private val repository: AgentRepository,
@@ -24,7 +25,7 @@ class IndexMessageEmbeddingsUseCase(
 
         val normalized = text.trim()
         if (normalized.isEmpty()) return Result.success(Unit)
-        val normalizedCreatedAt = createdAt.takeIf { it > 0 } ?: System.currentTimeMillis()
+        val normalizedCreatedAt = createdAt.takeIf { it > 0 } ?: Clock.System.now().toEpochMilliseconds()
 
         val chunks = splitIntoChunks(normalized)
         chunks.forEachIndexed { index, chunk ->

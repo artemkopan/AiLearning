@@ -82,6 +82,7 @@ class ConversationColumnViewModel(
                 buildConversationStatusTextUseCase(
                     agent = it,
                     queuedMessages = queuedMessages,
+                    activeTask = session.taskByAgent[agentId],
                 )
             },
             commandPalette = CommandPaletteUiModel(

@@ -1,11 +1,6 @@
 package io.artemkopan.ai.sharedui.ui.component
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,6 +14,7 @@ import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 fun StatusPanel(
     status: String,
     modifier: Modifier = Modifier,
+    showSpinner: Boolean = true,
 ) {
     CyberpunkPanel(
         title = "STATUS",
@@ -30,12 +26,14 @@ fun StatusPanel(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp,
-                color = CyberpunkColors.Cyan,
-            )
-            Spacer(modifier = Modifier.width(12.dp))
+            if (showSpinner) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = CyberpunkColors.Cyan,
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+            }
             Text(
                 status.uppercase(),
                 style = MaterialTheme.typography.labelMedium,
