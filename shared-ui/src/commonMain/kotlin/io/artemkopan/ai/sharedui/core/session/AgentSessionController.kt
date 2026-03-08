@@ -76,21 +76,6 @@ class AgentSessionController(
         }
     }
 
-    fun sendDraftUpdate(agentId: AgentId) {
-        val agent = _sessionState.value.agents[agentId] ?: return
-        sendCommand {
-            UpdateAgentDraftCommandDto(
-                agentId = agent.id.value,
-                model = agent.model,
-                maxOutputTokens = agent.maxOutputTokens,
-                temperature = agent.temperature,
-                stopSequences = agent.stopSequences,
-                agentMode = agent.agentMode,
-                contextConfig = agent.contextConfig,
-            )
-        }
-    }
-
     fun showError(title: String, message: String) {
         updateState {
             it.copy(errorDialog = ErrorDialogModel(title = title, message = message))
@@ -128,7 +113,6 @@ class AgentSessionController(
                         title = "Request Failed",
                         message = event.message,
                     )
-                    is UserProfileSnapshotDto -> applyUserProfile(event)
                     is TaskStateSnapshotDto -> applyTaskStateSnapshot(event)
                 }
             }
@@ -157,16 +141,13 @@ class AgentSessionController(
         scope.launch {
             gateway.getConfig()
                 .onSuccess { config ->
-                    val updates = mutableListOf<AgentState>()
                     updateState { current ->
                         val normalized = normalizeAgentsForConfigUseCase(current.agents, config)
-                        updates += normalized.draftUpdates
                         current.copy(
                             agents = normalized.agents,
                             agentConfig = config,
                         )
                     }
-                    updates.forEach { sendDraftUpdate(it.id) }
                 }
                 .onFailure { throwable ->
                     log.e(throwable) { "Failed to load config" }
@@ -193,7 +174,6 @@ class AgentSessionController(
         }
 
         queueManager.cancelDrainsForMissingAgents(mapped.agents.keys)
-        mapped.draftUpdates.forEach { sendDraftUpdate(it.id) }
         queueManager.triggerDrainForQueuedAgents()
     }
 
@@ -227,19 +207,6 @@ class AgentSessionController(
                 )
                 current.copy(taskByAgent = current.taskByAgent + (agentId to taskState))
             }
-        }
-    }
-
-    private fun applyUserProfile(snapshot: UserProfileSnapshotDto) {
-        updateState { current ->
-            current.copy(
-                userProfile = UserProfileState(
-                    communicationStyle = snapshot.communicationStyle,
-                    responseFormat = snapshot.responseFormat,
-                    restrictions = snapshot.restrictions,
-                    customInstructions = snapshot.customInstructions,
-                ),
-            )
         }
     }
 

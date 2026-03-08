@@ -1,6 +1,8 @@
 package io.artemkopan.ai.sharedui.core.session
 
-import io.artemkopan.ai.sharedcontract.*
+import io.artemkopan.ai.sharedcontract.AgentConfigDto
+import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
+import io.artemkopan.ai.sharedcontract.AgentMessageTypeDto
 
 data class UsageResult(
     val inputTokens: Int,
@@ -46,8 +48,6 @@ data class QueuedDraftSnapshot(
     val maxOutputTokens: String,
     val temperature: String,
     val stopSequences: String,
-    val agentMode: AgentMode,
-    val contextConfig: AgentContextConfigDto,
 )
 
 data class QueuedMessageState(
@@ -65,15 +65,8 @@ data class AgentState(
     val maxOutputTokens: String = "",
     val temperature: String = "",
     val stopSequences: String = "",
-    val agentMode: AgentMode = AgentMode.DEFAULT,
     val status: String = STATUS_DONE,
-    val contextConfig: AgentContextConfigDto = RollingSummaryContextConfigDto(),
-    val contextSummary: String = "",
-    val summarizedUntilCreatedAt: Long = 0,
-    val contextSummaryUpdatedAt: Long = 0,
     val messages: List<AgentMessageState> = emptyList(),
-    val branches: List<BranchDto> = emptyList(),
-    val activeBranchId: String? = null,
     val draftMessage: String = "",
 ) {
     val isLoading: Boolean
@@ -86,27 +79,15 @@ data class SessionState(
     val activeAgentId: AgentId? = null,
     val errorDialog: ErrorDialogModel? = null,
     val agentConfig: AgentConfigDto? = null,
-    val contextTotalTokensByAgent: Map<AgentId, String> = emptyMap(),
-    val contextLeftByAgent: Map<AgentId, String> = emptyMap(),
     val queuedByAgent: Map<AgentId, List<QueuedMessageState>> = emptyMap(),
     val isConnected: Boolean = false,
-    val userProfile: UserProfileState = UserProfileState(),
     val taskByAgent: Map<AgentId, TaskState> = emptyMap(),
 )
 
 data class AgentSessionSlice(
     val agent: AgentState,
     val queuedMessages: List<QueuedMessageState>,
-    val contextTotalTokensLabel: String,
-    val contextLeftLabel: String,
     val agentConfig: AgentConfigDto?,
-)
-
-data class UserProfileState(
-    val communicationStyle: String = "concise",
-    val responseFormat: String = "markdown",
-    val restrictions: List<String> = emptyList(),
-    val customInstructions: String = "",
 )
 
 data class TaskStepState(

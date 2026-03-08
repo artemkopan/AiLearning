@@ -24,24 +24,22 @@ class GenerateTextRouterHandler(
             val startedAt = System.currentTimeMillis()
             val payload = call.receive<GenerateRequestDto>()
             logger.info(
-                "POST /api/v1/generate requestId={} body: prompt='{}', model={}, temperature={}, maxOutputTokens={}, stopSequences={}, agentMode={}",
+                "POST /api/v1/generate requestId={} body: prompt='{}', model={}, temperature={}, maxOutputTokens={}, stopSequences={}",
                 requestId,
                 payload.prompt,
                 payload.model,
                 payload.temperature,
                 payload.maxOutputTokens,
                 payload.stopSequences,
-                payload.agentMode,
             )
 
             val result = generateTextUseCase.execute(
                 GenerateCommand(
                     prompt = payload.prompt,
-                    model = payload.model,
-                    temperature = payload.temperature,
+                    model = payload.model ?: "deepseek-chat",
+                    temperature = payload.temperature ?: 0.7,
                     maxOutputTokens = payload.maxOutputTokens,
                     stopSequences = payload.stopSequences,
-                    agentMode = payload.agentMode?.name?.lowercase(),
                 )
             )
 

@@ -1,7 +1,7 @@
 package io.artemkopan.ai.backend.agent.ws
 
-import io.artemkopan.ai.backend.agent.ws.usecase.AgentWsMessageContext
-import io.artemkopan.ai.backend.agent.ws.usecase.AgentWsMessageUseCase
+import io.artemkopan.ai.backend.agent.ws.resolver.AgentWsMessageContext
+import io.artemkopan.ai.backend.agent.ws.resolver.AgentWsMessageResolver
 import io.artemkopan.ai.core.application.usecase.GetAgentStateUseCase
 import io.artemkopan.ai.sharedcontract.*
 import io.ktor.server.websocket.*
@@ -15,7 +15,7 @@ class AgentWsMessageHandler(
     private val getAgentStateUseCase: GetAgentStateUseCase,
     private val sessionRegistry: AgentWsSessionRegistry,
     private val outboundService: AgentWsOutboundService,
-    private val handlersByMessageType: Map<KClass<out AgentWsClientMessageDto>, AgentWsMessageUseCase<out AgentWsClientMessageDto>>,
+    private val handlersByMessageType: Map<KClass<out AgentWsClientMessageDto>, AgentWsMessageResolver<out AgentWsClientMessageDto>>,
     private val json: Json,
     private val logger: Logger,
 ) {
@@ -89,11 +89,11 @@ class AgentWsMessageHandler(
 
     @Suppress("UNCHECKED_CAST")
     private suspend fun dispatch(
-        handler: AgentWsMessageUseCase<out AgentWsClientMessageDto>,
+        handler: AgentWsMessageResolver<out AgentWsClientMessageDto>,
         context: AgentWsMessageContext,
         message: AgentWsClientMessageDto,
     ): Result<Unit> {
-        return (handler as AgentWsMessageUseCase<AgentWsClientMessageDto>).execute(context, message)
+        return (handler as AgentWsMessageResolver<AgentWsClientMessageDto>).execute(context, message)
     }
 }
 
@@ -102,21 +102,9 @@ private fun AgentWsClientMessageDto.requestIdOrNull(): String? {
         is SubscribeAgentsDto -> requestId
         is CreateAgentCommandDto -> requestId
         is SelectAgentCommandDto -> requestId
-        is UpdateAgentDraftCommandDto -> requestId
         is CloseAgentCommandDto -> requestId
-        is SubmitAgentCommandDto -> requestId
         is SendAgentMessageCommandDto -> requestId
         is StopAgentMessageCommandDto -> requestId
-        is CreateBranchCommandDto -> requestId
-        is SwitchBranchCommandDto -> requestId
-        is DeleteBranchCommandDto -> requestId
-        is UpdateUserProfileCommandDto -> requestId
-        is CreateTaskCommandDto -> requestId
-        is TransitionTaskPhaseCommandDto -> requestId
-        is UpdateTaskStepCommandDto -> requestId
         is AcceptPlanCommandDto -> requestId
-        is RejectPlanCommandDto -> requestId
-        is EditPlanCommandDto -> requestId
-        is ConfirmExecutionCommandDto -> requestId
     }
 }

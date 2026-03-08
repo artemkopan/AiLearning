@@ -1,6 +1,5 @@
 package io.artemkopan.ai.backend.http.router
 
-import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.domain.repository.LlmRepository
 import io.artemkopan.ai.sharedcontract.ModelMetadataDto
 import io.ktor.http.*
@@ -16,7 +15,7 @@ class ModelMetadataRouterHandler(
         get("/api/v1/models/metadata") {
             val modelId = call.request.queryParameters["model"]?.trim().orEmpty()
             if (modelId.isEmpty()) {
-                throw AppError.Validation("Model query parameter is required.")
+                throw IllegalArgumentException("Model query parameter is required.")
             }
 
             val metadata = llmRepository.getModelMetadata(modelId).getOrElse { throwable ->

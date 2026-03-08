@@ -6,7 +6,14 @@ data class UserId(val value: String)
 
 data class AgentMessageId(val value: String)
 
-data class AgentStatus(val value: String)
+data class AgentStatus(val value: String) {
+    companion object {
+        val DONE = AgentStatus("done")
+        val PROCESSING = AgentStatus("processing")
+        val STOPPED = AgentStatus("stopped")
+        val FAILED = AgentStatus("failed")
+    }
+}
 
 data class AgentUsage(
     val inputTokens: Int,

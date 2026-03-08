@@ -6,6 +6,7 @@ import io.artemkopan.ai.backend.http.router.RouterHandler
 import io.artemkopan.ai.backend.http.router.ensureRequestId
 import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
+import io.artemkopan.ai.core.domain.error.DomainError
 import io.artemkopan.ai.sharedcontract.ErrorResponseDto
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
@@ -71,12 +72,14 @@ fun Application.module(
         exception<Throwable> { call, throwable ->
             val requestId = call.ensureRequestId()
             val userMessage = mapFailureToUserMessageUseCase.execute(throwable)
-                .getOrDefault("Something went wrong. Please try again.")
 
             val (status, code) = when (throwable) {
                 is AppError.Validation -> HttpStatusCode.BadRequest to "validation_error"
                 is AppError.RateLimited -> HttpStatusCode.TooManyRequests to "rate_limited"
                 is AppError.UpstreamUnavailable -> HttpStatusCode.BadGateway to "provider_error"
+                is DomainError.Validation -> HttpStatusCode.BadRequest to "validation_error"
+                is DomainError.RateLimited -> HttpStatusCode.TooManyRequests to "rate_limited"
+                is DomainError.ProviderUnavailable -> HttpStatusCode.BadGateway to "provider_error"
                 else -> HttpStatusCode.InternalServerError to "internal_error"
             }
 

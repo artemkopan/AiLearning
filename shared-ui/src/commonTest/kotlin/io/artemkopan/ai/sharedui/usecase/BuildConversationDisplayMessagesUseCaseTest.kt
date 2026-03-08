@@ -1,8 +1,6 @@
 package io.artemkopan.ai.sharedui.usecase
 
 import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
-import io.artemkopan.ai.sharedcontract.AgentMode
-import io.artemkopan.ai.sharedcontract.RollingSummaryContextConfigDto
 import io.artemkopan.ai.sharedui.core.session.AgentMessageState
 import io.artemkopan.ai.sharedui.core.session.QueuedDraftSnapshot
 import io.artemkopan.ai.sharedui.core.session.QueuedMessageState
@@ -33,8 +31,6 @@ class BuildConversationDisplayMessagesUseCaseTest {
                 maxOutputTokens = "",
                 temperature = "",
                 stopSequences = "",
-                agentMode = AgentMode.DEFAULT,
-                contextConfig = RollingSummaryContextConfigDto(),
             ),
         )
 

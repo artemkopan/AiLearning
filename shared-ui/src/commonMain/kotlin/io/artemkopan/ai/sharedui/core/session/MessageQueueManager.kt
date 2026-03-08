@@ -2,7 +2,6 @@ package io.artemkopan.ai.sharedui.core.session
 
 import io.artemkopan.ai.sharedcontract.AgentWsClientMessageDto
 import io.artemkopan.ai.sharedcontract.SendAgentMessageCommandDto
-import io.artemkopan.ai.sharedcontract.UpdateAgentDraftCommandDto
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -128,20 +127,6 @@ class MessageQueueManager(
     }
 
     private suspend fun sendQueuedMessage(agentId: AgentId, queued: QueuedMessageState): Result<Unit> {
-        val snapshot = queued.draftSnapshot
-        val updateDraftResult = sendGateway(
-            UpdateAgentDraftCommandDto(
-                agentId = agentId.value,
-                model = snapshot.model,
-                maxOutputTokens = snapshot.maxOutputTokens,
-                temperature = snapshot.temperature,
-                stopSequences = snapshot.stopSequences,
-                agentMode = snapshot.agentMode,
-                contextConfig = snapshot.contextConfig,
-            )
-        )
-        if (updateDraftResult.isFailure) return updateDraftResult
-
         return sendGateway(
             SendAgentMessageCommandDto(
                 agentId = agentId.value,

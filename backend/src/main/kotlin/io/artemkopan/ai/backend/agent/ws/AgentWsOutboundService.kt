@@ -43,7 +43,6 @@ open class AgentWsOutboundService(
         requestId: String?,
     ) {
         val message = mapFailureToUserMessageUseCase.execute(throwable)
-            .getOrDefault(throwable.message ?: "Unexpected error")
         sendError(session, message, requestId)
     }
 

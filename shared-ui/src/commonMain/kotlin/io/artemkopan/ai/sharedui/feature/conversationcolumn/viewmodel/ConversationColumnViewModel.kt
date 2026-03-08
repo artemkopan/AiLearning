@@ -20,7 +20,6 @@ class ConversationColumnViewModel(
     private val updateDraftMessageActionUseCase: UpdateDraftMessageActionUseCase,
     private val submitMessageActionUseCase: SubmitMessageActionUseCase,
     private val stopQueueActionUseCase: StopQueueActionUseCase,
-    private val createBranchActionUseCase: CreateBranchActionUseCase,
     private val findSlashTokenBoundsUseCase: FindSlashTokenBoundsUseCase,
     private val insertCommandTokenUseCase: InsertCommandTokenUseCase,
     private val buildCommandPaletteItemsUseCase: BuildCommandPaletteItemsUseCase,
@@ -28,10 +27,6 @@ class ConversationColumnViewModel(
     private val buildConversationStatusTextUseCase: BuildConversationStatusTextUseCase,
     private val conversationCommandRegistry: ConversationCommandRegistry,
     private val acceptPlanActionUseCase: AcceptPlanActionUseCase,
-    private val rejectPlanActionUseCase: RejectPlanActionUseCase,
-    private val editPlanActionUseCase: EditPlanActionUseCase,
-    private val confirmExecutionActionUseCase: ConfirmExecutionActionUseCase,
-    private val retryTaskActionUseCase: RetryTaskActionUseCase,
 ) : ViewModel() {
 
     private val messageInputValue = MutableStateFlow(TextFieldValue(""))
@@ -134,32 +129,8 @@ class ConversationColumnViewModel(
         stopQueueActionUseCase(agentId)
     }
 
-    fun onCreateBranch(checkpointMessageId: String, fallbackMessageId: String) {
-        createBranchActionUseCase(
-            agentId = agentId,
-            checkpointMessageId = checkpointMessageId,
-            name = "branch-${fallbackMessageId.takeLast(6)}",
-        )
-    }
-
     fun onAcceptPlan() {
         acceptPlanActionUseCase(agentId)
-    }
-
-    fun onRejectPlan() {
-        rejectPlanActionUseCase(agentId)
-    }
-
-    fun onEditPlan(instructions: String = "") {
-        editPlanActionUseCase(agentId, instructions)
-    }
-
-    fun onConfirmExecution() {
-        confirmExecutionActionUseCase(agentId)
-    }
-
-    fun onRetryTask() {
-        retryTaskActionUseCase(agentId)
     }
 }
 

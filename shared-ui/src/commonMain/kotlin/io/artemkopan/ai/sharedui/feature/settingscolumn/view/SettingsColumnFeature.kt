@@ -10,12 +10,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.artemkopan.ai.sharedcontract.*
 import io.artemkopan.ai.sharedui.feature.configpanel.view.ConfigPanelFeature
 import io.artemkopan.ai.sharedui.feature.configpanel.viewmodel.ConfigPanelViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
-import io.artemkopan.ai.sharedui.feature.userprofile.view.UserProfileFeature
-import io.artemkopan.ai.sharedui.feature.userprofile.viewmodel.UserProfileViewModel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkPanel
 import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 
@@ -23,7 +20,6 @@ import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 fun SettingsColumnFeature(
     settingsViewModel: SettingsColumnViewModel,
     configViewModel: ConfigPanelViewModel,
-    userProfileViewModel: UserProfileViewModel,
     modifier: Modifier = Modifier,
 ) {
     val state by settingsViewModel.state.collectAsState()
@@ -39,40 +35,13 @@ fun SettingsColumnFeature(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             RuntimeInfoPanel(
-                contextConfig = agent.contextConfig,
-                contextTotalTokensLabel = state.contextTotalTokensLabel,
-                contextLeftLabel = state.contextLeftLabel,
                 runtimeOutputTokensLabel = state.runtimeOutputTokensLabel,
                 runtimeApiDurationLabel = state.runtimeApiDurationLabel,
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            AgentModeSelector(
-                selected = agent.agentMode,
-                onModeSelected = settingsViewModel::onAgentModeChanged,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
             ConfigPanelFeature(
                 viewModel = configViewModel,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            ContextConfigPanel(
-                contextConfig = agent.contextConfig,
-                onStrategyChanged = settingsViewModel::onContextStrategyChanged,
-                onRecentMessagesChanged = settingsViewModel::onContextRecentMessagesChanged,
-                onSummarizeEveryChanged = settingsViewModel::onContextSummarizeEveryChanged,
-                onWindowSizeChanged = settingsViewModel::onContextWindowSizeChanged,
-                branches = agent.branches,
-                activeBranchId = agent.activeBranchId,
-                onSwitchBranch = settingsViewModel::onSwitchBranch,
-                onDeleteBranch = settingsViewModel::onDeleteBranch,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            UserProfileFeature(
-                viewModel = userProfileViewModel,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -92,9 +61,6 @@ fun SettingsColumnFeature(
 
 @Composable
 private fun RuntimeInfoPanel(
-    contextConfig: AgentContextConfigDto,
-    contextTotalTokensLabel: String,
-    contextLeftLabel: String,
     runtimeOutputTokensLabel: String,
     runtimeApiDurationLabel: String,
     modifier: Modifier = Modifier,
@@ -105,24 +71,9 @@ private fun RuntimeInfoPanel(
         modifier = modifier,
     ) {
         Text(
-            text = "memory model: ${memoryModelLabel(contextConfig)}",
-            style = MaterialTheme.typography.bodySmall,
-            color = CyberpunkColors.Yellow,
-        )
-        Text(
             text = "out tokens: $runtimeOutputTokensLabel",
             style = MaterialTheme.typography.bodySmall,
             color = CyberpunkColors.Cyan,
-        )
-        Text(
-            text = "context total: $contextTotalTokensLabel",
-            style = MaterialTheme.typography.bodySmall,
-            color = CyberpunkColors.TextPrimary,
-        )
-        Text(
-            text = "context left: $contextLeftLabel",
-            style = MaterialTheme.typography.bodySmall,
-            color = CyberpunkColors.TextPrimary,
         )
         Text(
             text = "api duration: $runtimeApiDurationLabel",
@@ -130,12 +81,4 @@ private fun RuntimeInfoPanel(
             color = CyberpunkColors.TextMuted,
         )
     }
-}
-
-private fun memoryModelLabel(contextConfig: AgentContextConfigDto): String = when (contextConfig) {
-    is FullHistoryContextConfigDto -> "FULL HISTORY"
-    is RollingSummaryContextConfigDto -> "ROLLING"
-    is SlidingWindowContextConfigDto -> "WINDOW"
-    is StickyFactsContextConfigDto -> "FACTS"
-    is BranchingContextConfigDto -> "BRANCHING"
 }

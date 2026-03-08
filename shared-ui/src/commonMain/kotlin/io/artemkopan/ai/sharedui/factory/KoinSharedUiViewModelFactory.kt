@@ -8,7 +8,6 @@ import io.artemkopan.ai.sharedui.feature.conversationcolumn.viewmodel.Conversati
 import io.artemkopan.ai.sharedui.feature.errordialog.viewmodel.ErrorDialogViewModel
 import io.artemkopan.ai.sharedui.feature.root.viewmodel.RootViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
-import io.artemkopan.ai.sharedui.feature.userprofile.viewmodel.UserProfileViewModel
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.annotation.Single
 import org.koin.core.parameter.parametersOf
@@ -47,7 +46,4 @@ class KoinSharedUiViewModelFactory : SharedUiViewModelFactory {
 
     @Composable
     override fun errorDialog(): ErrorDialogViewModel = koinViewModel()
-
-    @Composable
-    override fun userProfile(): UserProfileViewModel = koinViewModel()
 }

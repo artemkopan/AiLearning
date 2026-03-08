@@ -107,8 +107,6 @@ class SubmitMessageActionUseCase(
                 maxOutputTokens = agent.maxOutputTokens,
                 temperature = agent.temperature,
                 stopSequences = agent.stopSequences,
-                agentMode = agent.agentMode,
-                contextConfig = agent.contextConfig,
             ),
         )
 
@@ -142,21 +140,6 @@ class StopQueueActionUseCase(
 }
 
 @Factory
-class CreateBranchActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId, checkpointMessageId: String, name: String) {
-        controller.sendCommand {
-            CreateBranchCommandDto(
-                agentId = agentId.value,
-                checkpointMessageId = checkpointMessageId,
-                branchName = name,
-            )
-        }
-    }
-}
-
-@Factory
 class UpdateModelActionUseCase(
     private val controller: AgentSessionController,
     private val normalizeModelUseCase: NormalizeModelUseCase,
@@ -164,7 +147,6 @@ class UpdateModelActionUseCase(
     operator fun invoke(agentId: AgentId, value: String) {
         val normalized = normalizeModelUseCase(value, controller.getState().agentConfig)
         controller.updateAgent(agentId) { it.copy(model = normalized) }
-        controller.sendDraftUpdate(agentId)
     }
 }
 
@@ -174,7 +156,6 @@ class UpdateMaxOutputTokensActionUseCase(
 ) {
     operator fun invoke(agentId: AgentId, value: String) {
         controller.updateAgent(agentId) { it.copy(maxOutputTokens = value.filter { ch -> ch.isDigit() }) }
-        controller.sendDraftUpdate(agentId)
     }
 }
 
@@ -186,7 +167,6 @@ class UpdateTemperatureActionUseCase(
     operator fun invoke(agentId: AgentId, value: String) {
         val filtered = filterTemperatureInputUseCase(value)
         controller.updateAgent(agentId) { it.copy(temperature = filtered) }
-        controller.sendDraftUpdate(agentId)
     }
 }
 
@@ -196,166 +176,6 @@ class UpdateStopSequencesActionUseCase(
 ) {
     operator fun invoke(agentId: AgentId, value: String) {
         controller.updateAgent(agentId) { it.copy(stopSequences = value) }
-        controller.sendDraftUpdate(agentId)
-    }
-}
-
-@Factory
-class UpdateAgentModeActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId, value: AgentMode) {
-        controller.updateAgent(agentId) { it.copy(agentMode = value) }
-        controller.sendDraftUpdate(agentId)
-    }
-}
-
-@Factory
-class UpdateContextStrategyActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId, value: String) {
-        controller.updateAgent(agentId) { current ->
-            if (current.contextConfig.locked) return@updateAgent current
-            when (value) {
-                STRATEGY_FULL_HISTORY -> current.copy(
-                    contextConfig = FullHistoryContextConfigDto(locked = false)
-                )
-
-                STRATEGY_SLIDING_WINDOW -> current.copy(
-                    contextConfig = SlidingWindowContextConfigDto(
-                        windowSize = (current.contextConfig as? SlidingWindowContextConfigDto)?.windowSize
-                            ?: DEFAULT_SLIDING_WINDOW_SIZE,
-                        locked = false,
-                    )
-                )
-
-                STRATEGY_STICKY_FACTS -> current.copy(
-                    contextConfig = StickyFactsContextConfigDto(
-                        recentMessagesN = (current.contextConfig as? StickyFactsContextConfigDto)?.recentMessagesN ?: 12,
-                        locked = false,
-                    )
-                )
-
-                STRATEGY_BRANCHING -> current.copy(
-                    contextConfig = BranchingContextConfigDto(
-                        recentMessagesN = (current.contextConfig as? BranchingContextConfigDto)?.recentMessagesN ?: 12,
-                        locked = false,
-                    )
-                )
-
-                else -> current.copy(
-                    contextConfig = RollingSummaryContextConfigDto(
-                        recentMessagesN = (current.contextConfig as? RollingSummaryContextConfigDto)?.recentMessagesN ?: 12,
-                        summarizeEveryK = (current.contextConfig as? RollingSummaryContextConfigDto)?.summarizeEveryK ?: 10,
-                        locked = false,
-                    )
-                )
-            }
-        }
-        controller.sendDraftUpdate(agentId)
-    }
-}
-
-@Factory
-class UpdateContextRecentMessagesActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId, value: String) {
-        val parsed = value.toIntOrNull() ?: return
-        if (parsed <= 0) return
-        controller.updateAgent(agentId) { current ->
-            if (current.contextConfig.locked) return@updateAgent current
-            val updated = when (val config = current.contextConfig) {
-                is RollingSummaryContextConfigDto -> config.copy(recentMessagesN = parsed)
-                is StickyFactsContextConfigDto -> config.copy(recentMessagesN = parsed)
-                is BranchingContextConfigDto -> config.copy(recentMessagesN = parsed)
-                else -> return@updateAgent current
-            }
-            current.copy(contextConfig = updated)
-        }
-        controller.sendDraftUpdate(agentId)
-    }
-}
-
-@Factory
-class UpdateContextSummarizeEveryActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId, value: String) {
-        val parsed = value.toIntOrNull() ?: return
-        if (parsed <= 0) return
-        controller.updateAgent(agentId) { current ->
-            val config = current.contextConfig as? RollingSummaryContextConfigDto ?: return@updateAgent current
-            if (config.locked) return@updateAgent current
-            current.copy(contextConfig = config.copy(summarizeEveryK = parsed))
-        }
-        controller.sendDraftUpdate(agentId)
-    }
-}
-
-@Factory
-class UpdateContextWindowSizeActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId, value: String) {
-        val parsed = value.toIntOrNull() ?: return
-        if (parsed <= 0) return
-        controller.updateAgent(agentId) { current ->
-            val config = current.contextConfig as? SlidingWindowContextConfigDto ?: return@updateAgent current
-            if (config.locked) return@updateAgent current
-            current.copy(contextConfig = config.copy(windowSize = parsed))
-        }
-        controller.sendDraftUpdate(agentId)
-    }
-}
-
-@Factory
-class SwitchBranchActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId, branchId: String) {
-        controller.sendCommand {
-            SwitchBranchCommandDto(
-                agentId = agentId.value,
-                branchId = branchId,
-            )
-        }
-    }
-}
-
-@Factory
-class UpdateUserProfileActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(
-        communicationStyle: String,
-        responseFormat: String,
-        restrictions: List<String>,
-        customInstructions: String,
-    ) {
-        controller.sendCommand {
-            UpdateUserProfileCommandDto(
-                communicationStyle = communicationStyle,
-                responseFormat = responseFormat,
-                restrictions = restrictions,
-                customInstructions = customInstructions,
-            )
-        }
-    }
-}
-
-@Factory
-class DeleteBranchActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId, branchId: String) {
-        controller.sendCommand {
-            DeleteBranchCommandDto(
-                agentId = agentId.value,
-                branchId = branchId,
-            )
-        }
     }
 }
 
@@ -383,65 +203,3 @@ class AcceptPlanActionUseCase(
     }
 }
 
-@Factory
-class RejectPlanActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId) {
-        val task = controller.getState().taskByAgent[agentId] ?: return
-        controller.sendCommand {
-            RejectPlanCommandDto(agentId = agentId.value, taskId = task.id)
-        }
-    }
-}
-
-@Factory
-class EditPlanActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId, instructions: String = "") {
-        val task = controller.getState().taskByAgent[agentId] ?: return
-        controller.sendCommand {
-            EditPlanCommandDto(
-                agentId = agentId.value,
-                taskId = task.id,
-                instructions = instructions,
-            )
-        }
-    }
-}
-
-@Factory
-class ConfirmExecutionActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId, text: String = "") {
-        val task = controller.getState().taskByAgent[agentId] ?: return
-        controller.sendCommand {
-            ConfirmExecutionCommandDto(agentId = agentId.value, taskId = task.id, text = text)
-        }
-    }
-}
-
-@Factory
-class RetryTaskActionUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(agentId: AgentId) {
-        val task = controller.getState().taskByAgent[agentId] ?: return
-        controller.sendCommand {
-            TransitionTaskPhaseCommandDto(
-                agentId = agentId.value,
-                taskId = task.id,
-                fromPhase = "failed",
-                targetPhase = "planning",
-                reason = "User requested retry",
-            )
-        }
-    }
-}
-
-private const val STRATEGY_FULL_HISTORY = "full_history"
-private const val STRATEGY_SLIDING_WINDOW = "sliding_window"
-private const val STRATEGY_STICKY_FACTS = "sticky_facts"
-private const val STRATEGY_BRANCHING = "branching"

@@ -6,8 +6,6 @@ import io.artemkopan.ai.sharedui.core.session.AgentState
 data class SettingsColumnUiModel(
     val agent: AgentState? = null,
     val agentConfig: AgentConfigDto? = null,
-    val contextTotalTokensLabel: String = "n/a",
-    val contextLeftLabel: String = "n/a",
     val runtimeOutputTokensLabel: String = "n/a",
     val runtimeApiDurationLabel: String = "n/a",
 )

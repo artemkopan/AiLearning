@@ -37,12 +37,7 @@ class AgentWsMapper(
                         maxOutputTokens = agent.maxOutputTokens,
                         temperature = agent.temperature,
                         stopSequences = agent.stopSequences,
-                        agentMode = parseAgentMode(agent.agentMode),
                         status = agent.status.value,
-                        contextConfig = agent.contextConfig.toDto(),
-                        contextSummary = agent.contextSummary,
-                        summarizedUntilCreatedAt = agent.summarizedUntilCreatedAt,
-                        contextSummaryUpdatedAt = agent.contextSummaryUpdatedAt,
                         messages = agent.messages.map { message ->
                             AgentMessageDto(
                                 id = message.id.value,
@@ -66,15 +61,6 @@ class AgentWsMapper(
                                 messageType = message.messageType.toDto(),
                             )
                         },
-                        branches = agent.branches.map { branch ->
-                            BranchDto(
-                                id = branch.id,
-                                name = branch.name,
-                                checkpointMessageId = branch.checkpointMessageId.value,
-                                createdAt = branch.createdAt,
-                            )
-                        },
-                        activeBranchId = agent.activeBranchId,
                     )
                 },
                 activeAgentId = state.activeAgentId?.value,
@@ -134,12 +120,4 @@ class AgentWsMapper(
         AgentMessageType.EXECUTION_CONFIRMATION -> AgentMessageTypeDto.EXECUTION_CONFIRMATION
     }
 
-    private fun parseAgentMode(value: String): AgentMode {
-        return when (value.lowercase()) {
-            "engineer" -> AgentMode.ENGINEER
-            "philosophic" -> AgentMode.PHILOSOPHIC
-            "critic" -> AgentMode.CRITIC
-            else -> AgentMode.DEFAULT
-        }
-    }
 }

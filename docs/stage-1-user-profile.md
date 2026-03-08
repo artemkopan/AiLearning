@@ -421,7 +421,7 @@ data class UserProfileSnapshotDto(
 **Create** `backend/src/main/kotlin/io/artemkopan/ai/backend/agent/ws/usecase/UpdateUserProfileWsUseCase.kt`
 
 ```kotlin
-package io.artemkopan.ai.backend.agent.ws.usecase
+package io.artemkopan.ai.backend.agent.ws.resolver
 
 import io.artemkopan.ai.backend.agent.ws.AgentWsOutboundService
 import io.artemkopan.ai.core.application.model.UpdateUserProfileCommand

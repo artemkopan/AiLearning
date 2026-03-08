@@ -37,12 +37,7 @@ class MapSnapshotToUiStateUseCase(
                 maxOutputTokens = dto.maxOutputTokens,
                 temperature = dto.temperature,
                 stopSequences = dto.stopSequences,
-                agentMode = dto.agentMode,
                 status = dto.status,
-                contextConfig = dto.contextConfig,
-                contextSummary = dto.contextSummary,
-                summarizedUntilCreatedAt = dto.summarizedUntilCreatedAt,
-                contextSummaryUpdatedAt = dto.contextSummaryUpdatedAt,
                 messages = dto.messages.map { message ->
                     AgentMessageState(
                         id = message.id,
@@ -63,8 +58,6 @@ class MapSnapshotToUiStateUseCase(
                         messageType = message.messageType,
                     )
                 },
-                branches = dto.branches,
-                activeBranchId = dto.activeBranchId,
                 draftMessage = preservedDraft,
             )
             if (config != null && dto.model != normalizedModel && normalizedModel.isNotBlank()) {

@@ -1,4 +1,4 @@
-package io.artemkopan.ai.backend.agent.ws.usecase
+package io.artemkopan.ai.backend.agent.ws.resolver
 
 import io.artemkopan.ai.sharedcontract.AgentWsClientMessageDto
 import io.ktor.server.websocket.*
@@ -9,7 +9,7 @@ data class AgentWsMessageContext(
     val session: DefaultWebSocketServerSession,
 )
 
-interface AgentWsMessageUseCase<T : AgentWsClientMessageDto> {
+interface AgentWsMessageResolver<T : AgentWsClientMessageDto> {
     val messageType: KClass<T>
 
     suspend fun execute(context: AgentWsMessageContext, message: T): Result<Unit>

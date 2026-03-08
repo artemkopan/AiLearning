@@ -756,7 +756,7 @@ data class TaskStateSnapshotDto(
 **Create** `backend/src/main/kotlin/io/artemkopan/ai/backend/agent/ws/usecase/CreateTaskWsUseCase.kt`
 
 ```kotlin
-package io.artemkopan.ai.backend.agent.ws.usecase
+package io.artemkopan.ai.backend.agent.ws.resolver
 
 import io.artemkopan.ai.backend.agent.ws.AgentWsOutboundService
 import io.artemkopan.ai.core.application.usecase.task.CreateTaskUseCase
@@ -832,7 +832,7 @@ class CreateTaskWsUseCase(
 **Create** `backend/src/main/kotlin/io/artemkopan/ai/backend/agent/ws/usecase/TransitionTaskPhaseWsUseCase.kt`
 
 ```kotlin
-package io.artemkopan.ai.backend.agent.ws.usecase
+package io.artemkopan.ai.backend.agent.ws.resolver
 
 import io.artemkopan.ai.core.application.usecase.task.TransitionTaskPhaseUseCase
 import io.artemkopan.ai.core.domain.model.TaskPhase
@@ -864,7 +864,7 @@ class TransitionTaskPhaseWsUseCase(
 **Create** `backend/src/main/kotlin/io/artemkopan/ai/backend/agent/ws/usecase/UpdateTaskStepWsUseCase.kt`
 
 ```kotlin
-package io.artemkopan.ai.backend.agent.ws.usecase
+package io.artemkopan.ai.backend.agent.ws.resolver
 
 import io.artemkopan.ai.core.application.usecase.task.UpdateTaskStepUseCase
 import io.artemkopan.ai.core.domain.model.TaskStepStatus

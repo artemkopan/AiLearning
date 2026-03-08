@@ -107,13 +107,6 @@ data class AgentDto(
     val maxOutputTokens: String = "",
     val temperature: String = "",
     val stopSequences: String = "",
-    val agentMode: AgentMode = AgentMode.DEFAULT,
     val status: String,
-    val contextConfig: AgentContextConfigDto = RollingSummaryContextConfigDto(),
-    val contextSummary: String = "",
-    val summarizedUntilCreatedAt: Long = 0,
-    val contextSummaryUpdatedAt: Long = 0,
     val messages: List<AgentMessageDto> = emptyList(),
-    val branches: List<BranchDto> = emptyList(),
-    val activeBranchId: String? = null,
 )

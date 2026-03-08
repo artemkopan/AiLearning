@@ -25,8 +25,6 @@ class ObserveAgentSliceUseCase(
                 AgentSessionSlice(
                     agent = agent,
                     queuedMessages = current.queuedByAgent[agentId].orEmpty(),
-                    contextTotalTokensLabel = current.contextTotalTokensByAgent[agentId] ?: "n/a",
-                    contextLeftLabel = current.contextLeftByAgent[agentId] ?: "n/a",
                     agentConfig = current.agentConfig,
                 )
             }
@@ -47,14 +45,6 @@ class ObserveErrorUseCase(
 ) {
     operator fun invoke(): Flow<ErrorDialogModel?> =
         controller.sessionState.map { it.errorDialog }.distinctUntilChanged()
-}
-
-@Factory
-class ObserveUserProfileUseCase(
-    private val controller: AgentSessionController,
-) {
-    operator fun invoke(): Flow<UserProfileState> =
-        controller.sessionState.map { it.userProfile }.distinctUntilChanged()
 }
 
 @Factory
