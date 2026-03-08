@@ -1,9 +1,6 @@
 package io.artemkopan.ai.backend.agent.ws
 
-import io.artemkopan.ai.core.domain.model.AgentMessageRole
-import io.artemkopan.ai.core.domain.model.AgentMessageType
-import io.artemkopan.ai.core.domain.model.AgentState
-import io.artemkopan.ai.core.domain.model.AgentTask
+import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.sharedcontract.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -15,6 +12,7 @@ private data class PlanJsonDto(
     val plan: List<String> = emptyList(),
     @SerialName("question_for_user")
     val questionForUser: String = "",
+    val goal: String = "",
 )
 
 @Serializable
@@ -70,7 +68,7 @@ class AgentWsMapper(
     }
 
     fun toTaskStateSnapshot(task: AgentTask): TaskStateSnapshotDto {
-        val (planSteps, questionForUser) = parsePlanJson(task.planJson)
+        val parsedPlan = parsePlanJson(task.planJson)
         val validationChecks = parseValidationJson(task.validationJson)
 
         return TaskStateSnapshotDto(
@@ -79,11 +77,11 @@ class AgentWsMapper(
                 id = task.id.value,
                 agentId = task.agentId.value,
                 title = task.title,
-                currentPhase = task.currentPhase.name.lowercase(),
+                currentPhase = task.currentPhase.toDto(),
                 steps = task.steps.map { step ->
                     TaskStepDto(
                         index = step.index,
-                        phase = step.phase.name.lowercase(),
+                        phase = step.phase.toDto(),
                         description = step.description,
                         expectedAction = step.expectedAction,
                         status = step.status.name.lowercase(),
@@ -91,20 +89,41 @@ class AgentWsMapper(
                     )
                 },
                 currentStepIndex = task.currentStepIndex,
-                planSteps = planSteps,
-                questionForUser = questionForUser,
+                planSteps = parsedPlan.planSteps,
+                questionForUser = parsedPlan.questionForUser,
+                goal = parsedPlan.goal,
                 validationChecks = validationChecks,
             ),
         )
     }
 
-    private fun parsePlanJson(planJson: String): Pair<List<String>, String> {
-        if (planJson.isBlank()) return emptyList<String>() to ""
+    fun toPhaseChangedDto(
+        agentId: String,
+        taskId: String,
+        fromPhase: TaskPhase,
+        toPhase: TaskPhase,
+        reason: String,
+    ): TaskPhaseChangedDto = TaskPhaseChangedDto(
+        agentId = agentId,
+        taskId = taskId,
+        fromPhase = fromPhase.toDto(),
+        toPhase = toPhase.toDto(),
+        reason = reason,
+    )
+
+    private fun parsePlanJson(planJson: String): ParsedPlan {
+        if (planJson.isBlank()) return ParsedPlan()
         return runCatching {
             val dto = json.decodeFromString<PlanJsonDto>(planJson)
-            dto.plan to dto.questionForUser
-        }.getOrElse { _ -> emptyList<String>() to "" }
+            ParsedPlan(planSteps = dto.plan, questionForUser = dto.questionForUser, goal = dto.goal)
+        }.getOrElse { _ -> ParsedPlan() }
     }
+
+    private data class ParsedPlan(
+        val planSteps: List<String> = emptyList(),
+        val questionForUser: String = "",
+        val goal: String = "",
+    )
 
     private fun parseValidationJson(validationJson: String): List<ValidationCheckDto> {
         if (validationJson.isBlank()) return emptyList()
@@ -119,5 +138,16 @@ class AgentWsMapper(
         AgentMessageType.REVIEW -> AgentMessageTypeDto.REVIEW
         AgentMessageType.EXECUTION_CONFIRMATION -> AgentMessageTypeDto.EXECUTION_CONFIRMATION
     }
+}
 
+fun TaskPhase.toDto(): TaskPhaseDto = when (this) {
+    TaskPhase.Planning -> TaskPhaseDto.PLANNING
+    TaskPhase.WaitingForApproval -> TaskPhaseDto.WAITING_FOR_APPROVAL
+    TaskPhase.WaitingForUserInput -> TaskPhaseDto.WAITING_FOR_USER_INPUT
+    TaskPhase.Execution -> TaskPhaseDto.EXECUTION
+    TaskPhase.Validation -> TaskPhaseDto.VALIDATION
+    TaskPhase.Paused -> TaskPhaseDto.PAUSED
+    TaskPhase.Done -> TaskPhaseDto.DONE
+    TaskPhase.Failed -> TaskPhaseDto.FAILED
+    TaskPhase.Stopped -> TaskPhaseDto.STOPPED
 }

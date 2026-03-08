@@ -25,8 +25,10 @@ class ConversationColumnViewModel(
     private val buildCommandPaletteItemsUseCase: BuildCommandPaletteItemsUseCase,
     private val buildConversationDisplayMessagesUseCase: BuildConversationDisplayMessagesUseCase,
     private val buildConversationStatusTextUseCase: BuildConversationStatusTextUseCase,
+    private val buildTaskUiStateUseCase: BuildTaskUiStateUseCase,
     private val conversationCommandRegistry: ConversationCommandRegistry,
     private val acceptPlanActionUseCase: AcceptPlanActionUseCase,
+    private val rejectPlanActionUseCase: RejectPlanActionUseCase,
 ) : ViewModel() {
 
     private val messageInputValue = MutableStateFlow(TextFieldValue(""))
@@ -69,6 +71,8 @@ class ConversationColumnViewModel(
         )
         val paletteItems = buildCommandPaletteItemsUseCase(commandDefinitions, slashTokenBounds)
 
+        val activeTask = session.taskByAgent[agentId]
+
         ConversationColumnUiModel(
             agent = agent,
             allAgents = allAgents,
@@ -82,14 +86,15 @@ class ConversationColumnViewModel(
                 buildConversationStatusTextUseCase(
                     agent = it,
                     queuedMessages = queuedMessages,
-                    activeTask = session.taskByAgent[agentId],
+                    activeTask = activeTask,
                 )
             },
-            activeTask = session.taskByAgent[agentId],
+            activeTask = activeTask,
             commandPalette = CommandPaletteUiModel(
                 visible = slashTokenBounds != null && !paletteDismissed,
                 items = paletteItems,
             ),
+            taskUi = buildTaskUiStateUseCase(agent, activeTask),
         )
     }.stateIn(
         scope = viewModelScope,
@@ -131,6 +136,10 @@ class ConversationColumnViewModel(
 
     fun onAcceptPlan() {
         acceptPlanActionUseCase(agentId)
+    }
+
+    fun onRejectPlan(reason: String = "") {
+        rejectPlanActionUseCase(agentId, reason)
     }
 }
 

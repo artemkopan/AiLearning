@@ -27,7 +27,7 @@ internal fun String.toTaskSteps(json: Json): List<TaskStep> {
     return json.decodeFromString(ListSerializer(TaskStepJson.serializer()), this).map {
         TaskStep(
             index = it.index,
-            phase = runCatching { TaskPhase.valueOf(it.phase.uppercase()) }.getOrDefault(TaskPhase.PLANNING),
+            phase = runCatching { TaskPhase.fromName(it.phase) }.getOrDefault(TaskPhase.Planning),
             description = it.description,
             expectedAction = it.expectedAction,
             status = runCatching { TaskStepStatus.valueOf(it.status.uppercase()) }.getOrDefault(TaskStepStatus.PENDING),

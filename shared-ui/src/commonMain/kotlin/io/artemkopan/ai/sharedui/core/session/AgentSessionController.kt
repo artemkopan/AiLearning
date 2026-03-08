@@ -114,6 +114,7 @@ class AgentSessionController(
                         message = event.message,
                     )
                     is TaskStateSnapshotDto -> applyTaskStateSnapshot(event)
+                    is TaskPhaseChangedDto -> applyPhaseChange(event)
                 }
             }
         }
@@ -201,12 +202,23 @@ class AgentSessionController(
                     currentStepIndex = task.currentStepIndex,
                     planSteps = task.planSteps,
                     questionForUser = task.questionForUser,
+                    goal = task.goal,
                     validationChecks = task.validationChecks.map { check ->
                         TaskValidationCheckState(name = check.name, passed = check.passed)
                     },
                 )
                 current.copy(taskByAgent = current.taskByAgent + (agentId to taskState))
             }
+        }
+    }
+
+    private fun applyPhaseChange(event: TaskPhaseChangedDto) {
+        val agentId = AgentId(event.agentId)
+        updateState { current ->
+            val existing = current.taskByAgent[agentId] ?: return@updateState current
+            current.copy(
+                taskByAgent = current.taskByAgent + (agentId to existing.copy(currentPhase = event.toPhase))
+            )
         }
     }
 

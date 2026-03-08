@@ -4,6 +4,19 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+enum class TaskPhaseDto {
+    @SerialName("PLANNING") PLANNING,
+    @SerialName("WAITING_FOR_APPROVAL") WAITING_FOR_APPROVAL,
+    @SerialName("WAITING_FOR_USER_INPUT") WAITING_FOR_USER_INPUT,
+    @SerialName("EXECUTION") EXECUTION,
+    @SerialName("VALIDATION") VALIDATION,
+    @SerialName("PAUSED") PAUSED,
+    @SerialName("DONE") DONE,
+    @SerialName("FAILED") FAILED,
+    @SerialName("STOPPED") STOPPED,
+}
+
+@Serializable
 sealed interface AgentWsClientMessageDto
 
 @Serializable
@@ -58,15 +71,49 @@ data class AcceptPlanCommandDto(
 ) : AgentWsClientMessageDto
 
 @Serializable
+@SerialName("reject_plan")
+data class RejectPlanCommandDto(
+    val agentId: String,
+    val taskId: String,
+    val reason: String = "",
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("pause_task")
+data class PauseTaskCommandDto(
+    val agentId: String,
+    val taskId: String,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("resume_task")
+data class ResumeTaskCommandDto(
+    val agentId: String,
+    val taskId: String,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("stop_task")
+data class StopTaskCommandDto(
+    val agentId: String,
+    val taskId: String,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
 data class TaskDto(
     val id: String,
     val agentId: String,
     val title: String,
-    val currentPhase: String,
+    val currentPhase: TaskPhaseDto,
     val steps: List<TaskStepDto>,
     val currentStepIndex: Int,
     val planSteps: List<String> = emptyList(),
     val questionForUser: String = "",
+    val goal: String = "",
     val validationChecks: List<ValidationCheckDto> = emptyList(),
 )
 
@@ -79,7 +126,7 @@ data class ValidationCheckDto(
 @Serializable
 data class TaskStepDto(
     val index: Int,
-    val phase: String,
+    val phase: TaskPhaseDto,
     val description: String,
     val expectedAction: String,
     val status: String,
@@ -107,6 +154,16 @@ data class AgentStateSnapshotMessageDto(
 data class TaskStateSnapshotDto(
     val agentId: String,
     val task: TaskDto?,
+) : AgentWsServerMessageDto
+
+@Serializable
+@SerialName("task_phase_changed")
+data class TaskPhaseChangedDto(
+    val agentId: String,
+    val taskId: String,
+    val fromPhase: TaskPhaseDto,
+    val toPhase: TaskPhaseDto,
+    val reason: String = "",
 ) : AgentWsServerMessageDto
 
 @Serializable

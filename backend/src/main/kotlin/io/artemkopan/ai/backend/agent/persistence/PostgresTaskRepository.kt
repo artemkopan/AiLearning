@@ -6,7 +6,7 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.koin.core.annotation.Single
 
-@Single(binds = [io.artemkopan.ai.core.domain.repository.TaskRepository::class])
+@Single(binds = [TaskRepository::class])
 internal class PostgresTaskRepository(
     private val runtime: PostgresDbRuntime,
     private val json: Json,
@@ -93,7 +93,7 @@ internal class PostgresTaskRepository(
         while (steps.size <= stepIndex) {
             steps.add(TaskStep(
                 index = steps.size,
-                phase = TaskPhase.PLANNING,
+                phase = TaskPhase.Planning,
                 description = "",
                 expectedAction = "",
                 status = TaskStepStatus.PENDING,
@@ -124,9 +124,9 @@ internal class PostgresTaskRepository(
 
     private fun ResultRow.toTask(): AgentTask = AgentTask(
         id = TaskId(this[ScopedAgentTasksTable.taskId]),
-        agentId = io.artemkopan.ai.core.domain.model.AgentId(this[ScopedAgentTasksTable.agentId]),
+        agentId = AgentId(this[ScopedAgentTasksTable.agentId]),
         title = this[ScopedAgentTasksTable.title],
-        currentPhase = TaskPhase.valueOf(this[ScopedAgentTasksTable.currentPhase].uppercase()),
+        currentPhase = TaskPhase.fromName(this[ScopedAgentTasksTable.currentPhase]),
         steps = (this[ScopedAgentTasksTable.stepsJson] ?: "").toTaskSteps(json),
         currentStepIndex = this[ScopedAgentTasksTable.currentStepIndex],
         createdAt = this[ScopedAgentTasksTable.createdAt],

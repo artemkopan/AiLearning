@@ -3,6 +3,7 @@ package io.artemkopan.ai.sharedui.core.session
 import io.artemkopan.ai.sharedcontract.AgentConfigDto
 import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
 import io.artemkopan.ai.sharedcontract.AgentMessageTypeDto
+import io.artemkopan.ai.sharedcontract.TaskPhaseDto
 
 data class UsageResult(
     val inputTokens: Int,
@@ -92,7 +93,7 @@ data class AgentSessionSlice(
 
 data class TaskStepState(
     val index: Int,
-    val phase: String,
+    val phase: TaskPhaseDto,
     val description: String,
     val expectedAction: String,
     val status: String,
@@ -107,11 +108,12 @@ data class TaskValidationCheckState(
 data class TaskState(
     val id: String,
     val title: String,
-    val currentPhase: String,
+    val currentPhase: TaskPhaseDto,
     val steps: List<TaskStepState>,
     val currentStepIndex: Int,
     val planSteps: List<String> = emptyList(),
     val questionForUser: String = "",
+    val goal: String = "",
     val validationChecks: List<TaskValidationCheckState> = emptyList(),
 )
 

@@ -106,5 +106,9 @@ private fun AgentWsClientMessageDto.requestIdOrNull(): String? {
         is SendAgentMessageCommandDto -> requestId
         is StopAgentMessageCommandDto -> requestId
         is AcceptPlanCommandDto -> requestId
+        is RejectPlanCommandDto -> requestId
+        is PauseTaskCommandDto -> requestId
+        is ResumeTaskCommandDto -> requestId
+        is StopTaskCommandDto -> requestId
     }
 }

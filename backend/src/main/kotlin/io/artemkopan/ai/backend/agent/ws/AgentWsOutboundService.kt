@@ -2,6 +2,7 @@ package io.artemkopan.ai.backend.agent.ws
 
 import io.artemkopan.ai.core.application.usecase.MapFailureToUserMessageUseCase
 import io.artemkopan.ai.core.domain.model.AgentState
+import io.artemkopan.ai.core.domain.model.TaskPhase
 import io.artemkopan.ai.sharedcontract.AgentOperationFailedDto
 import io.artemkopan.ai.sharedcontract.AgentWsServerMessageDto
 import io.artemkopan.ai.sharedcontract.TaskStateSnapshotDto
@@ -56,6 +57,21 @@ open class AgentWsOutboundService(
     }
 
     open suspend fun broadcastTaskStateSnapshot(userScope: String, payload: TaskStateSnapshotDto) {
+        sessionRegistry.broadcast(
+            userScope = userScope,
+            text = json.encodeToString(AgentWsServerMessageDto.serializer(), payload),
+        )
+    }
+
+    open suspend fun broadcastPhaseChanged(
+        userScope: String,
+        agentId: String,
+        taskId: String,
+        fromPhase: TaskPhase,
+        toPhase: TaskPhase,
+        reason: String,
+    ) {
+        val payload = mapper.toPhaseChangedDto(agentId, taskId, fromPhase, toPhase, reason)
         sessionRegistry.broadcast(
             userScope = userScope,
             text = json.encodeToString(AgentWsServerMessageDto.serializer(), payload),

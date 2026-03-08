@@ -3,6 +3,7 @@ package io.artemkopan.ai.core.application.usecase
 import io.artemkopan.ai.core.domain.model.TaskId
 import io.artemkopan.ai.core.domain.model.TaskPhase
 import io.artemkopan.ai.core.domain.model.TaskPhaseTransition
+import io.artemkopan.ai.core.domain.model.TaskStateMachine
 import io.artemkopan.ai.core.domain.repository.TaskRepository
 import kotlinx.datetime.Clock
 
@@ -16,7 +17,7 @@ class TransitionTaskPhaseUseCase(
         targetPhase: TaskPhase,
         reason: String = "",
         stepIndex: Int? = null,
-    ): Result<Unit> {
+    ): Result<TaskPhase> {
         val userId = parseUserIdOrError(userScope).getOrElse { return Result.failure(it) }
         val aid = parseAgentIdOrError(agentId).getOrElse { return Result.failure(it) }
         val domainTaskId = TaskId(taskId)
@@ -25,7 +26,12 @@ class TransitionTaskPhaseUseCase(
         if (task != null && task.id != domainTaskId) {
             return Result.failure(IllegalStateException("Active task ${task.id.value} does not match requested task $taskId"))
         }
-        val fromPhase = task?.currentPhase ?: TaskPhase.PLANNING
+        val fromPhase = task?.currentPhase ?: TaskPhase.Planning
+        if (!TaskStateMachine.canTransition(fromPhase, targetPhase)) {
+            return Result.failure(
+                IllegalStateException("Invalid phase transition: ${fromPhase.name} -> ${targetPhase.name}")
+            )
+        }
         repository.appendTransition(
             userId,
             TaskPhaseTransition(
@@ -36,6 +42,8 @@ class TransitionTaskPhaseUseCase(
                 timestamp = now,
             ),
         ).getOrElse { return Result.failure(it) }
-        return repository.updateTaskPhase(userId, domainTaskId, targetPhase, now, stepIndex)
+        repository.updateTaskPhase(userId, domainTaskId, targetPhase, now, stepIndex)
+            .getOrElse { return Result.failure(it) }
+        return Result.success(fromPhase)
     }
 }

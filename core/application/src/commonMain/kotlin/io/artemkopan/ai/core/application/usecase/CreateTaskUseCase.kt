@@ -17,7 +17,7 @@ class CreateTaskUseCase(
             id = TaskId("task-${now}-${aid.value.take(8)}"),
             agentId = aid,
             title = title.ifBlank { "Task" },
-            currentPhase = TaskPhase.PLANNING,
+            currentPhase = TaskPhase.Planning,
             steps = emptyList(),
             currentStepIndex = 0,
             createdAt = now,

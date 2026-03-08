@@ -15,7 +15,28 @@ data class ConversationColumnUiModel(
     val statusText: String? = null,
     val activeTask: TaskState? = null,
     val commandPalette: CommandPaletteUiModel = CommandPaletteUiModel(),
+    val taskUi: TaskUiState = TaskUiState(),
 )
+
+data class TaskUiState(
+    val showPlanActions: Boolean = false,
+    val isWaitingForUserInput: Boolean = false,
+    val inputLabel: String = "// MESSAGE",
+    val answerPrompt: String? = null,
+    val phaseProgress: PhaseProgressUiState? = null,
+    val showSpinner: Boolean = false,
+)
+
+data class PhaseProgressUiState(
+    val label: String,
+    val style: PhaseProgressStyle,
+)
+
+enum class PhaseProgressStyle {
+    ACTIVE,
+    AWAITING_INPUT,
+    PAUSED,
+}
 
 data class ConversationDisplayMessage(
     val id: String,

@@ -82,6 +82,7 @@ val applicationModule = module {
     factory { CreateTaskUseCase(repository = get()) }
     factory { TransitionTaskPhaseUseCase(repository = get()) }
     factory { UpdateTaskUseCase(repository = get()) }
+    factory { SetAgentProcessingUseCase(repository = get()) }
     factory { MapFailureToUserMessageUseCase() }
 }
 

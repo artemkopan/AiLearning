@@ -203,3 +203,15 @@ class AcceptPlanActionUseCase(
     }
 }
 
+@Factory
+class RejectPlanActionUseCase(
+    private val controller: AgentSessionController,
+) {
+    operator fun invoke(agentId: AgentId, reason: String = "") {
+        val task = controller.getState().taskByAgent[agentId] ?: return
+        controller.sendCommand {
+            RejectPlanCommandDto(agentId = agentId.value, taskId = task.id, reason = reason)
+        }
+    }
+}
+

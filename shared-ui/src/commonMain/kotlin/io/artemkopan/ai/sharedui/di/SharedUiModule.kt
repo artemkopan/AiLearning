@@ -64,8 +64,10 @@ val sharedUiFeatureModule = module {
             buildCommandPaletteItemsUseCase = get(),
             buildConversationDisplayMessagesUseCase = get(),
             buildConversationStatusTextUseCase = get(),
+            buildTaskUiStateUseCase = get(),
             conversationCommandRegistry = get(),
             acceptPlanActionUseCase = get(),
+            rejectPlanActionUseCase = get(),
         )
     }
     viewModel { (agentId: AgentId) ->
