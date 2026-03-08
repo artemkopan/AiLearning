@@ -3,6 +3,7 @@ package io.artemkopan.ai.backend.di
 import io.artemkopan.ai.backend.agent.ws.AgentWsMessageHandler
 import io.artemkopan.ai.backend.agent.ws.usecase.AgentWsMessageUseCase
 import io.artemkopan.ai.backend.config.AppConfig
+import io.artemkopan.ai.backend.http.HttpClientCurlLogging
 import io.artemkopan.ai.backend.http.router.RouterHandler
 import io.artemkopan.ai.core.application.mapper.DomainErrorMapper
 import io.artemkopan.ai.core.application.usecase.*
@@ -23,8 +24,6 @@ import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.plugins.logging.*
-import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import org.koin.dsl.module
@@ -50,19 +49,7 @@ val networkModule = module {
                 requestTimeoutMillis = 60_000
                 connectTimeoutMillis = 10_000
             }
-            install(Logging) {
-                val httpClientLogger = LoggerFactory.getLogger("io.artemkopan.ai.backend.httpclient")
-                logger = object : io.ktor.client.plugins.logging.Logger {
-                    override fun log(message: String) {
-                        httpClientLogger.info(message)
-                    }
-                }
-                level = LogLevel.ALL
-                sanitizeHeader { header ->
-                    header.equals(HttpHeaders.Authorization, ignoreCase = true) ||
-                        header.equals("x-goog-api-key", ignoreCase = true)
-                }
-            }
+            install(HttpClientCurlLogging)
         }
     }
 }

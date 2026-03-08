@@ -88,6 +88,8 @@ class AgentWsCommandUseCasesTest {
                 getActiveTaskUseCase = koinApp.koin.get(),
                 createTaskUseCase = koinApp.koin.get(),
                 transitionTaskPhaseUseCase = koinApp.koin.get(),
+                taskRepository = koinApp.koin.get(),
+                parsePhaseResponseUseCase = koinApp.koin.get(),
                 mapper = koinApp.koin.get(),
                 outboundService = outbound,
             )

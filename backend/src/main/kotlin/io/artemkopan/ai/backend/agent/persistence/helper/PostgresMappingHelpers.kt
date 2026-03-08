@@ -46,6 +46,12 @@ internal class PostgresMappingHelpers(
             null
         }
 
+        val messageType = try {
+            AgentMessageType.valueOf(row[ScopedAgentMessagesTable.messageType].uppercase())
+        } catch (_: IllegalArgumentException) {
+            AgentMessageType.TEXT
+        }
+
         return AgentMessage(
             id = AgentMessageId(row[ScopedAgentMessagesTable.id]),
             role = when (row[ScopedAgentMessagesTable.role]) {
@@ -59,6 +65,7 @@ internal class PostgresMappingHelpers(
             model = row[ScopedAgentMessagesTable.model],
             usage = usage,
             latencyMs = row[ScopedAgentMessagesTable.latencyMs],
+            messageType = messageType,
         )
     }
 

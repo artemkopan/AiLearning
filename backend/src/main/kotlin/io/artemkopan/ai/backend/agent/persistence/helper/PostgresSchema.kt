@@ -51,6 +51,7 @@ internal object ScopedAgentMessagesTable : Table("scoped_agent_messages") {
     val usageOutputTokens = integer("usage_output_tokens").nullable()
     val usageTotalTokens = integer("usage_total_tokens").nullable()
     val latencyMs = long("latency_ms").nullable()
+    val messageType = varchar("message_type", 32).default("text")
 
     override val primaryKey = PrimaryKey(userId, id)
 }
@@ -124,6 +125,8 @@ internal object ScopedAgentTasksTable : Table("scoped_agent_tasks") {
     val currentPhase = varchar("current_phase", 32)
     val currentStepIndex = integer("current_step_index").default(0)
     val stepsJson = text("steps_json")
+    val planJson = text("plan_json").default("")
+    val validationJson = text("validation_json").default("")
     val createdAt = long("created_at")
     val updatedAt = long("updated_at")
 

@@ -50,7 +50,7 @@ fun dummySession(): DefaultWebSocketServerSession {
 
 open class RecordingOutboundService : AgentWsOutboundService(
     sessionRegistry = AgentWsSessionRegistry(),
-    mapper = AgentWsMapper(),
+    mapper = AgentWsMapper(Json { ignoreUnknownKeys = true }),
     json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
@@ -129,6 +129,7 @@ class FakeAgentRepository(
         usageOutputTokens: Int?,
         usageTotalTokens: Int?,
         latencyMs: Long?,
+        messageType: AgentMessageType?,
     ): Result<AgentState> {
         updatedMessageStatuses += status
         return Result.success(currentState.copy(version = currentState.version + 1))
@@ -199,9 +200,17 @@ class FakeTaskRepository(
         return Result.success(Unit)
     }
 
-    override suspend fun updateTaskPhase(userId: UserId, taskId: TaskId, phase: TaskPhase, updatedAt: Long): Result<Unit> {
+    override suspend fun updateTaskPhase(userId: UserId, taskId: TaskId, phase: TaskPhase, updatedAt: Long, stepIndex: Int?): Result<Unit> {
         phaseUpdates += taskId to phase
-        activeTask = activeTask?.let { if (it.id == taskId) it.copy(currentPhase = phase, updatedAt = updatedAt) else it }
+        activeTask = activeTask?.let {
+            if (it.id == taskId) {
+                it.copy(
+                    currentPhase = phase,
+                    updatedAt = updatedAt,
+                    currentStepIndex = stepIndex ?: it.currentStepIndex,
+                )
+            } else it
+        }
         return Result.success(Unit)
     }
 

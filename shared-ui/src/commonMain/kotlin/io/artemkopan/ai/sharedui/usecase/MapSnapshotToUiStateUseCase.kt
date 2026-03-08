@@ -60,6 +60,7 @@ class MapSnapshotToUiStateUseCase(
                             )
                         },
                         latencyMs = message.latencyMs,
+                        messageType = message.messageType,
                     )
                 },
                 branches = dto.branches,

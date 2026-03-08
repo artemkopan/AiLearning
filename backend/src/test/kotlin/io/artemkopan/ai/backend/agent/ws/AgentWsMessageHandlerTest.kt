@@ -103,6 +103,10 @@ private fun buildCompleteHandlerMap(
         NoopUseCase(CreateTaskCommandDto::class),
         NoopUseCase(TransitionTaskPhaseCommandDto::class),
         NoopUseCase(UpdateTaskStepCommandDto::class),
+        NoopUseCase(AcceptPlanCommandDto::class),
+        NoopUseCase(RejectPlanCommandDto::class),
+        NoopUseCase(EditPlanCommandDto::class),
+        NoopUseCase(ConfirmExecutionCommandDto::class),
     ).associateBy { it.messageType }
 }
 

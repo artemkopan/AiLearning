@@ -26,6 +26,7 @@ class DefaultLlmRepository(
                 maxOutputTokens = input.maxOutputTokens?.value,
                 stopSequences = input.stopSequences?.values,
                 systemInstruction = input.systemInstruction?.value,
+                responseFormat = input.responseFormat,
             )
         ).map { response ->
             log.d { "Repository mapping response: provider=${response.provider}" }

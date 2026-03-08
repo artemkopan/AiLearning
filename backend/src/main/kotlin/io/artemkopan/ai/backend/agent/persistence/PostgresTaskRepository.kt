@@ -26,12 +26,13 @@ class PostgresTaskRepository internal constructor(
             task = lazyArg { task },
         )
 
-    override suspend fun updateTaskPhase(userId: UserId, taskId: TaskId, phase: TaskPhase, updatedAt: Long): Result<Unit> =
+    override suspend fun updateTaskPhase(userId: UserId, taskId: TaskId, phase: TaskPhase, updatedAt: Long, stepIndex: Int?): Result<Unit> =
         updateTaskPhaseOp.value.execute(
             userId = lazyArg { userId },
             taskId = lazyArg { taskId },
             phase = lazyArg { phase },
             updatedAt = lazyArg { updatedAt },
+            stepIndex = lazyArg { stepIndex },
         )
 
     override suspend fun updateTaskStep(

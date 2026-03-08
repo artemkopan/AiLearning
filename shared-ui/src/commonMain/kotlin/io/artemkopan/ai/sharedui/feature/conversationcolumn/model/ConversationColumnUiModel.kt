@@ -4,6 +4,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import io.artemkopan.ai.sharedui.core.session.AgentMessageState
 import io.artemkopan.ai.sharedui.core.session.AgentState
 import io.artemkopan.ai.sharedui.core.session.QueuedMessageState
+import io.artemkopan.ai.sharedui.core.session.TaskState
 
 data class ConversationColumnUiModel(
     val agent: AgentState? = null,
@@ -12,6 +13,7 @@ data class ConversationColumnUiModel(
     val inputValue: TextFieldValue = TextFieldValue(""),
     val displayMessages: List<ConversationDisplayMessage> = emptyList(),
     val statusText: String? = null,
+    val activeTask: TaskState? = null,
     val commandPalette: CommandPaletteUiModel = CommandPaletteUiModel(),
 )
 

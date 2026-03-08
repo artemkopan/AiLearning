@@ -40,6 +40,8 @@ internal class UpsertTaskOperation(
                 it[currentPhase] = t.currentPhase.name.lowercase()
                 it[currentStepIndex] = t.currentStepIndex
                 it[stepsJson] = t.steps.toJson(json.value)
+                it[planJson] = t.planJson
+                it[validationJson] = t.validationJson
                 it[updatedAt] = now
             }
         } else {
@@ -51,6 +53,8 @@ internal class UpsertTaskOperation(
                 it[currentPhase] = t.currentPhase.name.lowercase()
                 it[currentStepIndex] = t.currentStepIndex
                 it[stepsJson] = t.steps.toJson(json.value)
+                it[planJson] = t.planJson
+                it[validationJson] = t.validationJson
                 it[createdAt] = now
                 it[updatedAt] = now
             }

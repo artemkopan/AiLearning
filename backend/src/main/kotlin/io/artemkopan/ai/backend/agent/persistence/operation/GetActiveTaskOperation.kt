@@ -2,6 +2,7 @@ package io.artemkopan.ai.backend.agent.persistence.operation
 
 import io.artemkopan.ai.backend.agent.persistence.helper.PostgresDbRuntime
 import io.artemkopan.ai.backend.agent.persistence.helper.ScopedAgentTasksTable
+import io.artemkopan.ai.backend.agent.persistence.helper.parseTaskPhaseFromDb
 import io.artemkopan.ai.backend.agent.persistence.helper.toTaskSteps
 import io.artemkopan.ai.core.domain.model.*
 import kotlinx.serialization.json.Json
@@ -28,11 +29,13 @@ internal class GetActiveTaskOperation(
                     id = TaskId(row[ScopedAgentTasksTable.taskId]),
                     agentId = agentId.value,
                     title = row[ScopedAgentTasksTable.title],
-                    currentPhase = TaskPhase.valueOf(row[ScopedAgentTasksTable.currentPhase].uppercase()),
+                    currentPhase = parseTaskPhaseFromDb(row[ScopedAgentTasksTable.currentPhase]),
                     steps = row[ScopedAgentTasksTable.stepsJson].toTaskSteps(json.value),
                     currentStepIndex = row[ScopedAgentTasksTable.currentStepIndex],
                     createdAt = row[ScopedAgentTasksTable.createdAt],
                     updatedAt = row[ScopedAgentTasksTable.updatedAt],
+                    planJson = row.getOrNull(ScopedAgentTasksTable.planJson) ?: "",
+                    validationJson = row.getOrNull(ScopedAgentTasksTable.validationJson) ?: "",
                 )
             }
     }

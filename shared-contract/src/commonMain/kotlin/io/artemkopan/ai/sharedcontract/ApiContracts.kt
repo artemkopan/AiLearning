@@ -1,5 +1,6 @@
 package io.artemkopan.ai.sharedcontract
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -78,6 +79,13 @@ enum class AgentMessageRoleDto {
 }
 
 @Serializable
+enum class AgentMessageTypeDto {
+    @SerialName("text") TEXT,
+    @SerialName("review") REVIEW,
+    @SerialName("execution_confirmation") EXECUTION_CONFIRMATION,
+}
+
+@Serializable
 data class AgentMessageDto(
     val id: String,
     val role: AgentMessageRoleDto,
@@ -88,6 +96,7 @@ data class AgentMessageDto(
     val model: String? = null,
     val usage: TokenUsageDto? = null,
     val latencyMs: Long? = null,
+    val messageType: AgentMessageTypeDto = AgentMessageTypeDto.TEXT,
 )
 
 @Serializable

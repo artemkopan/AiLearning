@@ -8,7 +8,6 @@ import io.artemkopan.ai.sharedui.feature.conversationcolumn.viewmodel.Conversati
 import io.artemkopan.ai.sharedui.feature.errordialog.viewmodel.ErrorDialogViewModel
 import io.artemkopan.ai.sharedui.feature.root.viewmodel.RootViewModel
 import io.artemkopan.ai.sharedui.feature.settingscolumn.viewmodel.SettingsColumnViewModel
-import io.artemkopan.ai.sharedui.feature.taskstatemanager.viewmodel.TaskStateManagerViewModel
 import io.artemkopan.ai.sharedui.feature.userprofile.viewmodel.UserProfileViewModel
 import io.artemkopan.ai.sharedui.gateway.AgentGateway
 import org.koin.core.module.dsl.viewModel
@@ -68,14 +67,11 @@ val sharedUiFeatureModule = module {
             buildConversationDisplayMessagesUseCase = get(),
             buildConversationStatusTextUseCase = get(),
             conversationCommandRegistry = get(),
-        )
-    }
-    viewModel { (agentId: AgentId) ->
-        TaskStateManagerViewModel(
-            agentId = agentId,
-            observeSessionStateUseCase = get(),
-            pauseTaskActionUseCase = get(),
-            resumeTaskActionUseCase = get(),
+            acceptPlanActionUseCase = get(),
+            rejectPlanActionUseCase = get(),
+            editPlanActionUseCase = get(),
+            confirmExecutionActionUseCase = get(),
+            retryTaskActionUseCase = get(),
         )
     }
     viewModel { (agentId: AgentId) ->

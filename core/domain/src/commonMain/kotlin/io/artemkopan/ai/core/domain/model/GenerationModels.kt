@@ -12,6 +12,11 @@ data class StopSequences(val values: List<String>)
 
 data class SystemInstruction(val value: String)
 
+enum class LlmResponseFormat {
+    TEXT,
+    JSON,
+}
+
 data class LlmGenerationInput(
     val prompt: Prompt,
     val modelId: ModelId,
@@ -19,6 +24,7 @@ data class LlmGenerationInput(
     val maxOutputTokens: MaxOutputTokens? = null,
     val stopSequences: StopSequences? = null,
     val systemInstruction: SystemInstruction? = null,
+    val responseFormat: LlmResponseFormat = LlmResponseFormat.TEXT,
 )
 
 data class TokenUsage(

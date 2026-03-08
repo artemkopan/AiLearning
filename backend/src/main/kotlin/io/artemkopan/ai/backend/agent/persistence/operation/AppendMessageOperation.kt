@@ -58,6 +58,7 @@ internal class AppendMessageOperation(
             row[usageOutputTokens] = msg.usage?.outputTokens
             row[usageTotalTokens] = msg.usage?.totalTokens
             row[latencyMs] = msg.latencyMs
+            row[messageType] = msg.messageType.name.lowercase()
         }
 
         if (msg.role == AgentMessageRole.USER && msg.text.isNotBlank()) {

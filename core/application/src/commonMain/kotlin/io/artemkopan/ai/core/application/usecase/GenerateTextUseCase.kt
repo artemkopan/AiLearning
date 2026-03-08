@@ -1,12 +1,12 @@
 package io.artemkopan.ai.core.application.usecase
 
+import co.touchlab.kermit.Logger
 import io.artemkopan.ai.core.application.mapper.DomainErrorMapper
 import io.artemkopan.ai.core.application.model.GenerateCommand
 import io.artemkopan.ai.core.application.model.GenerateOutput
 import io.artemkopan.ai.core.application.model.UsageOutput
 import io.artemkopan.ai.core.domain.model.LlmGenerationInput
 import io.artemkopan.ai.core.domain.repository.LlmRepository
-import co.touchlab.kermit.Logger
 
 class GenerateTextUseCase(
     private val repository: LlmRepository,
@@ -41,7 +41,12 @@ class GenerateTextUseCase(
             return Result.failure(error)
         }
 
-        val systemInstruction = resolveAgentModeUseCase.execute(command.agentMode).getOrElse { error ->
+        val systemInstruction = when {
+            command.systemInstructionOverride != null ->
+                Result.success(io.artemkopan.ai.core.domain.model.SystemInstruction(command.systemInstructionOverride!!))
+            else ->
+                resolveAgentModeUseCase.execute(command.agentMode)
+        }.getOrElse { error ->
             log.w { "Agent mode resolution failed: ${error.message}" }
             return Result.failure(error)
         }
@@ -56,6 +61,7 @@ class GenerateTextUseCase(
                 maxOutputTokens = options.maxOutputTokens,
                 stopSequences = options.stopSequences,
                 systemInstruction = systemInstruction,
+                responseFormat = command.responseFormat,
             )
         ).map { generation ->
             log.i {

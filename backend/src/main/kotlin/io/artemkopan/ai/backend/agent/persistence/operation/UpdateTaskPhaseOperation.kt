@@ -18,6 +18,7 @@ internal class UpdateTaskPhaseOperation(
         taskId: Lazy<TaskId>,
         phase: Lazy<TaskPhase>,
         updatedAt: Lazy<Long>,
+        stepIndex: Lazy<Int?> = lazy { null },
     ): Result<Unit> = runtime.value.runDb {
         ScopedAgentTasksTable.update(
             where = {
@@ -27,6 +28,7 @@ internal class UpdateTaskPhaseOperation(
         ) {
             it[currentPhase] = phase.value.name.lowercase()
             it[this.updatedAt] = updatedAt.value
+            stepIndex.value?.let { idx -> it[currentStepIndex] = idx }
         }
     }
 }

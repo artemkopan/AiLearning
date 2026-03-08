@@ -13,11 +13,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.artemkopan.ai.sharedcontract.AgentMessageRoleDto
+import io.artemkopan.ai.sharedcontract.AgentMessageTypeDto
 import io.artemkopan.ai.sharedcontract.BranchingContextConfigDto
 import io.artemkopan.ai.sharedui.core.session.AgentMessageState
+import io.artemkopan.ai.sharedui.core.session.TaskState
 import io.artemkopan.ai.sharedui.feature.conversationcolumn.viewmodel.ConversationColumnViewModel
-import io.artemkopan.ai.sharedui.feature.taskstatemanager.view.TaskStateManagerFeature
-import io.artemkopan.ai.sharedui.feature.taskstatemanager.viewmodel.TaskStateManagerViewModel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkPanel
 import io.artemkopan.ai.sharedui.ui.component.CyberpunkTextField
 import io.artemkopan.ai.sharedui.ui.component.StatusPanel
@@ -27,7 +27,6 @@ import io.artemkopan.ai.sharedui.ui.theme.CyberpunkColors
 @Composable
 fun ConversationColumnFeature(
     viewModel: ConversationColumnViewModel,
-    taskStateManagerViewModel: TaskStateManagerViewModel?,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
@@ -69,11 +68,14 @@ fun ConversationColumnFeature(
                         )
                     } else {
                         val isBranching = agent.contextConfig is BranchingContextConfigDto
+                        val lastMessageId = state.displayMessages.lastOrNull()?.message?.id
                         state.displayMessages.forEach { displayMessage ->
                             MessageRow(
                                 message = displayMessage.message,
                                 isQueuedLocal = displayMessage.isQueuedLocal,
                                 isBranchingActive = isBranching,
+                                isLastMessage = displayMessage.message.id == lastMessageId,
+                                activeTask = state.activeTask,
                                 onStop = viewModel::onStopQueue,
                                 onBranch = { messageId ->
                                     viewModel.onCreateBranch(
@@ -81,6 +83,11 @@ fun ConversationColumnFeature(
                                         fallbackMessageId = displayMessage.message.id,
                                     )
                                 },
+                                onAcceptPlan = viewModel::onAcceptPlan,
+                                onRejectPlan = viewModel::onRejectPlan,
+                                onEditPlan = viewModel::onEditPlan,
+                                onConfirmExecution = viewModel::onConfirmExecution,
+                                onRetryTask = viewModel::onRetryTask,
                             )
                         }
                     }
@@ -131,19 +138,26 @@ fun ConversationColumnFeature(
             )
         }
 
-        if (taskStateManagerViewModel != null) {
-            TaskStateManagerFeature(
-                viewModel = taskStateManagerViewModel,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
         state.statusText?.let { status ->
-            StatusPanel(
-                status = status,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                showSpinner = agent.isLoading,
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                StatusPanel(
+                    status = status,
+                    modifier = Modifier.weight(1f),
+                    showSpinner = agent.isLoading,
+                )
+                if (state.activeTask?.currentPhase.equals("failed", ignoreCase = true)) {
+                    Text(
+                        text = "[RETRY]",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = CyberpunkColors.Yellow,
+                        modifier = Modifier.clickable(onClick = viewModel::onRetryTask),
+                    )
+                }
+            }
         }
     }
 }
@@ -153,8 +167,15 @@ private fun MessageRow(
     message: AgentMessageState,
     isQueuedLocal: Boolean,
     isBranchingActive: Boolean,
+    isLastMessage: Boolean,
+    activeTask: TaskState?,
     onStop: () -> Unit,
     onBranch: (messageId: String) -> Unit,
+    onAcceptPlan: () -> Unit,
+    onRejectPlan: () -> Unit,
+    onEditPlan: (instructions: String) -> Unit,
+    onConfirmExecution: () -> Unit,
+    onRetryTask: () -> Unit,
 ) {
     val roleColor = when (message.role) {
         AgentMessageRoleDto.USER -> if (isQueuedLocal) CyberpunkColors.Cyan else CyberpunkColors.Yellow
@@ -220,10 +241,127 @@ private fun MessageRow(
             )
         }
 
+        if (isLastMessage && !isQueuedLocal && message.status.equals("done", ignoreCase = true)) {
+            when (message.messageType) {
+                AgentMessageTypeDto.REVIEW -> {
+                    ReviewActionButtons(
+                        onAccept = onAcceptPlan,
+                        onEditPlan = onEditPlan,
+                        onReject = onRejectPlan,
+                    )
+                }
+                AgentMessageTypeDto.EXECUTION_CONFIRMATION -> {
+                    ConfirmExecutionButtons(
+                        onConfirm = onConfirmExecution,
+                    )
+                }
+                else -> {}
+            }
+        }
+
+        if (activeTask != null && activeTask.planSteps.isNotEmpty() && isLastMessage) {
+            PlanStepsDisplay(planSteps = activeTask.planSteps)
+        }
+
+        if (activeTask != null && activeTask.validationChecks.isNotEmpty() && isLastMessage) {
+            ValidationChecksDisplay(checks = activeTask.validationChecks)
+        }
+
         Spacer(modifier = Modifier.height(4.dp))
         HorizontalDivider(
             thickness = 1.dp,
             color = CyberpunkColors.BorderDark,
+        )
+    }
+}
+
+@Composable
+private fun ReviewActionButtons(
+    onAccept: () -> Unit,
+    onEditPlan: (instructions: String) -> Unit,
+    onReject: () -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.padding(top = 6.dp),
+    ) {
+        Text(
+            text = "[APPROVE]",
+            style = MaterialTheme.typography.labelMedium,
+            color = CyberpunkColors.NeonGreen,
+            modifier = Modifier.clickable(onClick = onAccept),
+        )
+        Text(
+            text = "[EDIT PLAN]",
+            style = MaterialTheme.typography.labelMedium,
+            color = CyberpunkColors.Yellow,
+            modifier = Modifier.clickable { onEditPlan("") },
+        )
+        Text(
+            text = "[CANCEL]",
+            style = MaterialTheme.typography.labelMedium,
+            color = CyberpunkColors.Red,
+            modifier = Modifier.clickable(onClick = onReject),
+        )
+    }
+}
+
+@Composable
+private fun PlanStepsDisplay(planSteps: List<String>) {
+    Column(
+        modifier = Modifier.padding(top = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = "PLAN:",
+            style = MaterialTheme.typography.labelSmall,
+            color = CyberpunkColors.Yellow,
+        )
+        planSteps.forEachIndexed { index, step ->
+            Text(
+                text = "${index + 1}. $step",
+                style = MaterialTheme.typography.bodySmall,
+                color = CyberpunkColors.TextPrimary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ValidationChecksDisplay(checks: List<io.artemkopan.ai.sharedui.core.session.TaskValidationCheckState>) {
+    Column(
+        modifier = Modifier.padding(top = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = "VALIDATION:",
+            style = MaterialTheme.typography.labelSmall,
+            color = CyberpunkColors.Cyan,
+        )
+        checks.forEach { check ->
+            val color = if (check.passed) CyberpunkColors.NeonGreen else CyberpunkColors.Red
+            Text(
+                text = "${if (check.passed) "✓" else "✗"} ${check.name}",
+                style = MaterialTheme.typography.bodySmall,
+                color = color,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConfirmExecutionButtons(
+    onConfirm: () -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.padding(top = 6.dp),
+    ) {
+        Text(
+            text = "[CONFIRM]",
+            style = MaterialTheme.typography.labelMedium,
+            color = CyberpunkColors.NeonGreen,
+            modifier = Modifier.clickable(onClick = onConfirm),
         )
     }
 }

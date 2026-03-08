@@ -27,6 +27,11 @@ class ConversationColumnViewModel(
     private val buildConversationDisplayMessagesUseCase: BuildConversationDisplayMessagesUseCase,
     private val buildConversationStatusTextUseCase: BuildConversationStatusTextUseCase,
     private val conversationCommandRegistry: ConversationCommandRegistry,
+    private val acceptPlanActionUseCase: AcceptPlanActionUseCase,
+    private val rejectPlanActionUseCase: RejectPlanActionUseCase,
+    private val editPlanActionUseCase: EditPlanActionUseCase,
+    private val confirmExecutionActionUseCase: ConfirmExecutionActionUseCase,
+    private val retryTaskActionUseCase: RetryTaskActionUseCase,
 ) : ViewModel() {
 
     private val messageInputValue = MutableStateFlow(TextFieldValue(""))
@@ -85,6 +90,7 @@ class ConversationColumnViewModel(
                     activeTask = session.taskByAgent[agentId],
                 )
             },
+            activeTask = session.taskByAgent[agentId],
             commandPalette = CommandPaletteUiModel(
                 visible = slashTokenBounds != null && !paletteDismissed,
                 items = paletteItems,
@@ -134,6 +140,26 @@ class ConversationColumnViewModel(
             checkpointMessageId = checkpointMessageId,
             name = "branch-${fallbackMessageId.takeLast(6)}",
         )
+    }
+
+    fun onAcceptPlan() {
+        acceptPlanActionUseCase(agentId)
+    }
+
+    fun onRejectPlan() {
+        rejectPlanActionUseCase(agentId)
+    }
+
+    fun onEditPlan(instructions: String = "") {
+        editPlanActionUseCase(agentId, instructions)
+    }
+
+    fun onConfirmExecution() {
+        confirmExecutionActionUseCase(agentId)
+    }
+
+    fun onRetryTask() {
+        retryTaskActionUseCase(agentId)
     }
 }
 

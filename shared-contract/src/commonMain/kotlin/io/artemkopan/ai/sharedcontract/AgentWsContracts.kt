@@ -136,6 +136,40 @@ data class UpdateTaskStepCommandDto(
 ) : AgentWsClientMessageDto
 
 @Serializable
+@SerialName("accept_plan")
+data class AcceptPlanCommandDto(
+    val agentId: String,
+    val taskId: String,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("reject_plan")
+data class RejectPlanCommandDto(
+    val agentId: String,
+    val taskId: String,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("edit_plan")
+data class EditPlanCommandDto(
+    val agentId: String,
+    val taskId: String,
+    val instructions: String = "",
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
+@SerialName("confirm_execution")
+data class ConfirmExecutionCommandDto(
+    val agentId: String,
+    val taskId: String,
+    val text: String = "",
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
 data class TaskDto(
     val id: String,
     val agentId: String,
@@ -143,6 +177,15 @@ data class TaskDto(
     val currentPhase: String,
     val steps: List<TaskStepDto>,
     val currentStepIndex: Int,
+    val planSteps: List<String> = emptyList(),
+    val questionForUser: String = "",
+    val validationChecks: List<ValidationCheckDto> = emptyList(),
+)
+
+@Serializable
+data class ValidationCheckDto(
+    val name: String = "",
+    val passed: Boolean = false,
 )
 
 @Serializable

@@ -11,14 +11,17 @@ data class AgentTask(
     val currentStepIndex: Int,
     val createdAt: Long,
     val updatedAt: Long,
+    val planJson: String = "",
+    val validationJson: String = "",
 )
 
 enum class TaskPhase {
     PLANNING,
+    WAITING_FOR_APPROVAL,
     EXECUTION,
     VALIDATION,
     DONE,
-    PAUSED,
+    FAILED,
 }
 
 data class TaskStep(

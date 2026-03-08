@@ -22,6 +22,7 @@ interface AgentRepository {
         usageOutputTokens: Int? = null,
         usageTotalTokens: Int? = null,
         latencyMs: Long? = null,
+        messageType: AgentMessageType? = null,
     ): Result<AgentState>
     suspend fun findMessage(userId: UserId, agentId: AgentId, messageId: AgentMessageId): Result<AgentMessage?>
     suspend fun hasProcessingMessage(userId: UserId, agentId: AgentId): Result<Boolean>

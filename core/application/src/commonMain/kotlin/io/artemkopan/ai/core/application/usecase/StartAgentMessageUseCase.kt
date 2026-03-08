@@ -126,7 +126,7 @@ class StartAgentMessageUseCase(
         val userProfileSnippet = buildUserProfilePromptSnippetUseCase.execute(userProfile)
 
         val activeTask = getActiveTaskUseCase.execute(userId, command.agentId).getOrNull()
-        val taskStateSnippet = buildTaskStatePromptSnippetUseCase.execute(activeTask)
+        val taskPromptResult = buildTaskStatePromptSnippetUseCase.execute(activeTask)
 
         val conversationPrompt = buildContextPromptUseCase.execute(
             AssistantMemoryModel(
@@ -135,7 +135,7 @@ class StartAgentMessageUseCase(
                 ),
                 working = WorkingMemoryLayer(
                     taskDataSummary = preparedContext.summaryText,
-                    taskStateSnippet = taskStateSnippet,
+                    taskStateSnippet = taskPromptResult.taskStateSnippet,
                 ),
                 longTerm = LongTermMemoryLayer(
                     profileAndDecisions = agentFacts?.factsJson.orEmpty(),
@@ -174,6 +174,8 @@ class StartAgentMessageUseCase(
                         .filter { it.isNotEmpty() }
                         .takeIf { it.isNotEmpty() },
                     agentMode = latestAgent.agentMode.takeIf { it != "default" },
+                    responseFormat = taskPromptResult.responseFormat,
+                    systemInstructionOverride = taskPromptResult.phaseSystemInstruction,
                 ),
             )
         )

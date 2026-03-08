@@ -2,6 +2,7 @@ package io.artemkopan.ai.core.application.usecase
 
 import io.artemkopan.ai.core.application.error.AppError
 import io.artemkopan.ai.core.application.model.GenerateOutput
+import io.artemkopan.ai.core.domain.model.AgentMessageType
 import io.artemkopan.ai.core.domain.model.AgentState
 import io.artemkopan.ai.core.domain.model.AgentStatus
 import io.artemkopan.ai.core.domain.repository.AgentRepository
@@ -11,6 +12,7 @@ data class CompleteAgentMessageCommand(
     val messageId: String,
     val output: GenerateOutput,
     val latencyMs: Long? = null,
+    val messageType: AgentMessageType? = null,
 )
 
 class CompleteAgentMessageUseCase(
@@ -52,6 +54,7 @@ class CompleteAgentMessageUseCase(
             usageOutputTokens = command.output.usage?.outputTokens,
             usageTotalTokens = command.output.usage?.totalTokens,
             latencyMs = command.latencyMs,
+            messageType = command.messageType,
         ).getOrElse { return Result.failure(it) }
 
         return repository.updateAgentStatus(

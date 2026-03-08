@@ -219,6 +219,11 @@ class AgentSessionController(
                         )
                     },
                     currentStepIndex = task.currentStepIndex,
+                    planSteps = task.planSteps,
+                    questionForUser = task.questionForUser,
+                    validationChecks = task.validationChecks.map { check ->
+                        TaskValidationCheckState(name = check.name, passed = check.passed)
+                    },
                 )
                 current.copy(taskByAgent = current.taskByAgent + (agentId to taskState))
             }

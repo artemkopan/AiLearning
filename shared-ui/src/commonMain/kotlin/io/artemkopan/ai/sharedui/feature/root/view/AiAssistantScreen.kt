@@ -37,7 +37,6 @@ fun AiAssistantScreen(
 
     val activeAgentId = rootState.activeAgentId
     val conversationViewModel = activeAgentId?.let { factory.conversation(it) }
-    val taskStateManagerViewModel = activeAgentId?.let { factory.taskStateManager(it) }
     val settingsViewModel = activeAgentId?.let { factory.settings(it) }
     val configViewModel = activeAgentId?.let { factory.config(it) }
 
@@ -83,7 +82,6 @@ fun AiAssistantScreen(
                     if (conversationViewModel != null) {
                         ConversationColumnFeature(
                             viewModel = conversationViewModel,
-                            taskStateManagerViewModel = taskStateManagerViewModel,
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight(),

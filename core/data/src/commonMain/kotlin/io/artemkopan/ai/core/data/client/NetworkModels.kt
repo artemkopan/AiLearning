@@ -1,5 +1,7 @@
 package io.artemkopan.ai.core.data.client
 
+import io.artemkopan.ai.core.domain.model.LlmResponseFormat
+
 data class NetworkGenerateRequest(
     val prompt: String,
     val model: String,
@@ -7,6 +9,7 @@ data class NetworkGenerateRequest(
     val maxOutputTokens: Int? = null,
     val stopSequences: List<String>? = null,
     val systemInstruction: String? = null,
+    val responseFormat: LlmResponseFormat = LlmResponseFormat.TEXT,
 )
 
 data class NetworkTokenUsage(

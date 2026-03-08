@@ -19,6 +19,12 @@ enum class AgentMessageRole {
     ASSISTANT,
 }
 
+enum class AgentMessageType {
+    TEXT,
+    REVIEW,
+    EXECUTION_CONFIRMATION,
+}
+
 data class AgentMessage(
     val id: AgentMessageId,
     val role: AgentMessageRole,
@@ -29,6 +35,7 @@ data class AgentMessage(
     val model: String? = null,
     val usage: AgentUsage? = null,
     val latencyMs: Long? = null,
+    val messageType: AgentMessageType = AgentMessageType.TEXT,
 )
 
 data class AgentContextMemory(

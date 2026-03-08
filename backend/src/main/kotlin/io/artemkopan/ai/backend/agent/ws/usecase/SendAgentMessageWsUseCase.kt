@@ -11,6 +11,7 @@ import io.artemkopan.ai.core.application.usecase.task.GetActiveTaskUseCase
 import io.artemkopan.ai.core.application.usecase.task.TransitionTaskPhaseUseCase
 import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
+import io.artemkopan.ai.core.domain.repository.TaskRepository
 import io.artemkopan.ai.sharedcontract.SendAgentMessageCommandDto
 import kotlinx.coroutines.CancellationException
 import org.koin.core.annotation.Factory
@@ -33,6 +34,8 @@ class SendAgentMessageWsUseCase(
     private val getActiveTaskUseCase: GetActiveTaskUseCase,
     private val createTaskUseCase: CreateTaskUseCase,
     private val transitionTaskPhaseUseCase: TransitionTaskPhaseUseCase,
+    private val taskRepository: TaskRepository,
+    private val parsePhaseResponseUseCase: ParsePhaseResponseUseCase,
     private val mapper: AgentWsMapper,
     private val outboundService: AgentWsOutboundService,
     private val logger: Logger = LoggerFactory.getLogger(SendAgentMessageWsUseCase::class.java),
@@ -80,18 +83,25 @@ class SendAgentMessageWsUseCase(
                         val latencyMs = System.currentTimeMillis() - startedAt
                         generation
                             .onSuccess { output ->
+                                val currentTask = getActiveTaskUseCase.execute(context.userScope, started.agentId.value).getOrNull()
+                                val (displayText, msgType) = formatPhaseOutput(currentTask, output.text)
                                 completeAgentMessageUseCase.execute(
                                     context.userScope,
                                     CompleteAgentMessageCommand(
                                         agentId = started.agentId.value,
                                         messageId = started.messageId.value,
-                                        output = output,
+                                        output = output.copy(text = displayText),
                                         latencyMs = latencyMs,
+                                        messageType = msgType,
                                     )
                                 )
                                     .onSuccess { state ->
                                         outboundService.broadcastSnapshot(context.userScope, state)
-                                        advanceTaskPhaseAfterCompletion(context, started.agentId.value)
+                                        advanceTaskPhaseAfterCompletion(
+                                            context = context,
+                                            agentId = started.agentId.value,
+                                            outputText = output.text,
+                                        )
                                     }
                                     .onFailure { throwable ->
                                         markProcessingFailed(
@@ -159,15 +169,56 @@ class SendAgentMessageWsUseCase(
         return Result.success(Unit)
     }
 
-    private suspend fun advanceTaskPhaseAfterCompletion(context: AgentWsMessageContext, agentId: String) {
+    private suspend fun advanceTaskPhaseAfterCompletion(
+        context: AgentWsMessageContext,
+        agentId: String,
+        outputText: String,
+    ) {
         val task = getActiveTaskUseCase.execute(context.userScope, agentId).getOrNull() ?: return
-        if (task.currentPhase == TaskPhase.PAUSED || task.currentPhase == TaskPhase.DONE) return
+        if (task.currentPhase == TaskPhase.WAITING_FOR_APPROVAL || task.currentPhase == TaskPhase.DONE || task.currentPhase == TaskPhase.FAILED) return
 
-        val nextPhase = when (task.currentPhase) {
-            TaskPhase.PLANNING -> TaskPhase.EXECUTION
-            TaskPhase.EXECUTION -> TaskPhase.VALIDATION
-            TaskPhase.VALIDATION -> TaskPhase.DONE
-            TaskPhase.DONE, TaskPhase.PAUSED -> return
+        val userId = UserId(context.userScope)
+
+        when (task.currentPhase) {
+            TaskPhase.PLANNING -> {
+                parsePhaseResponseUseCase.parsePlanningResponse(outputText).onSuccess {
+                    val updatedTask = task.copy(planJson = outputText)
+                    taskRepository.upsertTask(userId, updatedTask).getOrElse {
+                        logger.warn("Failed to store plan: {}", it.message)
+                    }
+                }
+            }
+            TaskPhase.VALIDATION -> {
+                val (nextPhase, stepIndex) = parsePhaseResponseUseCase.parseValidationResponse(outputText)
+                    .map { validation ->
+                        if (validation.success) TaskPhase.DONE to 3
+                        else TaskPhase.FAILED to 3
+                    }
+                    .getOrElse { TaskPhase.DONE to 3 }
+                val updatedTask = task.copy(validationJson = outputText)
+                taskRepository.upsertTask(userId, updatedTask).getOrElse {
+                    logger.warn("Failed to store validation: {}", it.message)
+                }
+                transitionTaskPhaseUseCase.execute(
+                    userId = context.userScope,
+                    taskId = task.id.value,
+                    fromPhase = task.currentPhase,
+                    targetPhase = nextPhase,
+                    reason = "Validation completed",
+                    newStepIndex = stepIndex,
+                ).onSuccess {
+                    broadcastTaskSnapshotAndMaybeTriggerValidation(context, agentId, task, nextPhase)
+                }
+                return
+            }
+            else -> {}
+        }
+
+        val (nextPhase, stepIndex) = when (task.currentPhase) {
+            TaskPhase.PLANNING -> TaskPhase.WAITING_FOR_APPROVAL to 1
+            TaskPhase.EXECUTION -> TaskPhase.VALIDATION to 2
+            TaskPhase.VALIDATION -> TaskPhase.DONE to 3
+            TaskPhase.DONE, TaskPhase.WAITING_FOR_APPROVAL, TaskPhase.FAILED -> return
         }
 
         transitionTaskPhaseUseCase.execute(
@@ -176,14 +227,98 @@ class SendAgentMessageWsUseCase(
             fromPhase = task.currentPhase,
             targetPhase = nextPhase,
             reason = "Assistant message completed",
+            newStepIndex = stepIndex,
         ).onSuccess {
-            val updatedTask = getActiveTaskUseCase.execute(context.userScope, agentId).getOrNull()
-            if (updatedTask != null) {
-                outboundService.broadcastTaskStateSnapshot(
-                    userScope = context.userScope,
-                    payload = mapper.toTaskStateSnapshot(updatedTask),
-                )
+            broadcastTaskSnapshotAndMaybeTriggerValidation(context, agentId, task, nextPhase)
+        }
+    }
+
+    private suspend fun broadcastTaskSnapshotAndMaybeTriggerValidation(
+        context: AgentWsMessageContext,
+        agentId: String,
+        task: AgentTask,
+        nextPhase: TaskPhase,
+    ) {
+        val updatedTask = getActiveTaskUseCase.execute(context.userScope, agentId).getOrNull()
+        if (updatedTask != null) {
+            outboundService.broadcastTaskStateSnapshot(
+                userScope = context.userScope,
+                payload = mapper.toTaskStateSnapshot(updatedTask),
+            )
+        }
+
+        if (task.currentPhase == TaskPhase.EXECUTION) {
+            triggerSystemPhaseGeneration(context, agentId, "[Validating results...]")
+        }
+    }
+
+    suspend fun triggerSystemPhaseGeneration(
+        context: AgentWsMessageContext,
+        agentId: String,
+        systemText: String,
+    ) {
+        if (processingRegistry.isAgentBusy(context.userScope, agentId)) {
+            logger.warn("Cannot trigger system generation: agent is busy userScope={} agentId={}", context.userScope, agentId)
+            return
+        }
+
+        startAgentMessageUseCase.execute(
+            context.userScope,
+            SendAgentMessageCommand(agentId = agentId, text = systemText),
+        ).onSuccess { started ->
+            outboundService.broadcastSnapshot(context.userScope, started.state)
+
+            val job = processingRegistry.launch {
+                try {
+                    val startedAt = System.currentTimeMillis()
+                    val generation = generateTextUseCase.execute(started.generateCommand)
+                    val latencyMs = System.currentTimeMillis() - startedAt
+                    generation
+                        .onSuccess { output ->
+                            val currentTask = getActiveTaskUseCase.execute(context.userScope, started.agentId.value).getOrNull()
+                            val (displayText, msgType) = formatPhaseOutput(currentTask, output.text)
+                            completeAgentMessageUseCase.execute(
+                                context.userScope,
+                                CompleteAgentMessageCommand(
+                                    agentId = started.agentId.value,
+                                    messageId = started.messageId.value,
+                                    output = output.copy(text = displayText),
+                                    latencyMs = latencyMs,
+                                    messageType = msgType,
+                                )
+                            ).onSuccess { state ->
+                                outboundService.broadcastSnapshot(context.userScope, state)
+                                advanceTaskPhaseAfterCompletion(
+                                    context = context,
+                                    agentId = started.agentId.value,
+                                    outputText = output.text,
+                                )
+                            }.onFailure { throwable ->
+                                markProcessingFailed(context.userScope, started.agentId.value, started.messageId.value, null)
+                                logger.warn("System generation complete failed: {}", throwable.message)
+                            }
+                        }
+                        .onFailure { throwable ->
+                            markProcessingFailed(context.userScope, started.agentId.value, started.messageId.value, null)
+                            logger.warn("System generation failed: {}", throwable.message)
+                        }
+                } catch (throwable: Throwable) {
+                    markProcessingFailed(context.userScope, started.agentId.value, started.messageId.value, null)
+                    if (throwable is CancellationException) throw throwable
+                    logger.warn("System generation error: {}", throwable.message)
+                } finally {
+                    processingRegistry.clearProcessing(context.userScope, started.agentId.value, started.messageId.value)
+                }
             }
+
+            processingRegistry.registerProcessing(
+                userScope = context.userScope,
+                agentId = started.agentId.value,
+                messageId = started.messageId.value,
+                job = job,
+            )
+        }.onFailure { throwable ->
+            logger.warn("Failed to start system generation: {}", throwable.message)
         }
     }
 
@@ -365,6 +500,31 @@ class SendAgentMessageWsUseCase(
                 "MEMORY LAYER SET TO LONG-TERM ($LONG_TERM_TOKEN). " +
                     "Responses now prioritize persistent profile/decisions and retrieved knowledge."
             }
+        }
+    }
+
+    private fun formatPhaseOutput(task: AgentTask?, rawText: String): Pair<String, AgentMessageType?> {
+        if (task == null) return rawText to null
+        return when (task.currentPhase) {
+            TaskPhase.PLANNING -> {
+                val display = parsePhaseResponseUseCase.parsePlanningResponse(rawText)
+                    .map { parsePhaseResponseUseCase.formatPlanningForDisplay(it) }
+                    .getOrDefault(rawText)
+                display to AgentMessageType.REVIEW
+            }
+            TaskPhase.EXECUTION -> {
+                val display = parsePhaseResponseUseCase.parseExecutionResponse(rawText)
+                    .map { parsePhaseResponseUseCase.formatExecutionForDisplay(it) }
+                    .getOrDefault(rawText)
+                display to null
+            }
+            TaskPhase.VALIDATION -> {
+                val display = parsePhaseResponseUseCase.parseValidationResponse(rawText)
+                    .map { parsePhaseResponseUseCase.formatValidationForDisplay(it) }
+                    .getOrDefault(rawText)
+                display to null
+            }
+            else -> rawText to null
         }
     }
 

@@ -1,6 +1,5 @@
 package io.artemkopan.ai.backend.agent.persistence.helper
 
-import io.artemkopan.ai.core.domain.model.TaskPhase
 import io.artemkopan.ai.core.domain.model.TaskStep
 import io.artemkopan.ai.core.domain.model.TaskStepStatus
 import kotlinx.serialization.Serializable
@@ -33,7 +32,7 @@ private fun TaskStep.toJsonDto() = TaskStepJson(
 
 private fun TaskStepJson.toDomain() = TaskStep(
     index = index,
-    phase = TaskPhase.valueOf(phase.uppercase()),
+    phase = parseTaskPhaseFromDb(phase),
     description = description,
     expectedAction = expectedAction,
     status = TaskStepStatus.valueOf(status.uppercase()),

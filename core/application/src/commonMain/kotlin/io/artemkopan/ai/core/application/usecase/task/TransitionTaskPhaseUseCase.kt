@@ -16,6 +16,7 @@ class TransitionTaskPhaseUseCase(
         fromPhase: TaskPhase,
         targetPhase: TaskPhase,
         reason: String = "",
+        newStepIndex: Int? = null,
     ): Result<Unit> {
         val domainUserId = parseUserIdOrError(userId).getOrElse { return Result.failure(it) }
         val domainTaskId = TaskId(taskId)
@@ -33,6 +34,6 @@ class TransitionTaskPhaseUseCase(
             ),
         ).getOrElse { return Result.failure(it) }
 
-        return repository.updateTaskPhase(domainUserId, domainTaskId, targetPhase, now)
+        return repository.updateTaskPhase(domainUserId, domainTaskId, targetPhase, now, stepIndex = newStepIndex)
     }
 }

@@ -26,6 +26,7 @@ data class AgentMessageState(
     val model: String? = null,
     val usage: UsageResult? = null,
     val latencyMs: Long? = null,
+    val messageType: AgentMessageTypeDto = AgentMessageTypeDto.TEXT,
 )
 
 data class ErrorDialogModel(
@@ -117,12 +118,20 @@ data class TaskStepState(
     val result: String = "",
 )
 
+data class TaskValidationCheckState(
+    val name: String,
+    val passed: Boolean,
+)
+
 data class TaskState(
     val id: String,
     val title: String,
     val currentPhase: String,
     val steps: List<TaskStepState>,
     val currentStepIndex: Int,
+    val planSteps: List<String> = emptyList(),
+    val questionForUser: String = "",
+    val validationChecks: List<TaskValidationCheckState> = emptyList(),
 )
 
 const val STATUS_PROCESSING = "processing"

@@ -2,6 +2,7 @@ package io.artemkopan.ai.core.data.client
 
 import co.touchlab.kermit.Logger
 import io.artemkopan.ai.core.data.error.DataError
+import io.artemkopan.ai.core.domain.model.LlmResponseFormat
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
@@ -37,6 +38,10 @@ class DeepSeekNetworkClient(
                 temperature = request.temperature,
                 maxTokens = request.maxOutputTokens,
                 stop = request.stopSequences?.takeIf { it.isNotEmpty() },
+                responseFormat = when (request.responseFormat) {
+                    LlmResponseFormat.JSON -> DeepSeekResponseFormat(type = "json_object")
+                    LlmResponseFormat.TEXT -> null
+                },
             )
 
             val response: DeepSeekChatCompletionsResponse = httpClient.post(endpoint) {
@@ -195,6 +200,11 @@ class DeepSeekNetworkClient(
 }
 
 @Serializable
+private data class DeepSeekResponseFormat(
+    val type: String,
+)
+
+@Serializable
 private data class DeepSeekChatCompletionsRequest(
     val model: String,
     val messages: List<DeepSeekMessage>,
@@ -202,6 +212,8 @@ private data class DeepSeekChatCompletionsRequest(
     @SerialName("max_tokens")
     val maxTokens: Int? = null,
     val stop: List<String>? = null,
+    @SerialName("response_format")
+    val responseFormat: DeepSeekResponseFormat? = null,
 )
 
 @Serializable

@@ -3,10 +3,7 @@ package io.artemkopan.ai.backend.agent.persistence.operation
 import io.artemkopan.ai.backend.agent.persistence.helper.PostgresDbRuntime
 import io.artemkopan.ai.backend.agent.persistence.helper.PostgresStateHelpers
 import io.artemkopan.ai.backend.agent.persistence.helper.ScopedAgentMessagesTable
-import io.artemkopan.ai.core.domain.model.AgentId
-import io.artemkopan.ai.core.domain.model.AgentMessageId
-import io.artemkopan.ai.core.domain.model.AgentState
-import io.artemkopan.ai.core.domain.model.UserId
+import io.artemkopan.ai.core.domain.model.*
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.update
 import org.koin.core.annotation.Single
@@ -28,6 +25,7 @@ internal class UpdateMessageOperation(
         usageOutputTokens: Lazy<Int?>,
         usageTotalTokens: Lazy<Int?>,
         latencyMs: Lazy<Long?>,
+        messageType: Lazy<AgentMessageType?> = lazy { null },
     ): Result<AgentState> = runtime.value.runDb {
         val user = userId.value
         val agent = agentId.value
@@ -40,6 +38,7 @@ internal class UpdateMessageOperation(
         val nextUsageOutputTokens = usageOutputTokens.value
         val nextUsageTotalTokens = usageTotalTokens.value
         val nextLatencyMs = latencyMs.value
+        val nextMessageType = messageType.value
         val updated = ScopedAgentMessagesTable.update({
             (ScopedAgentMessagesTable.userId eq user.value) and
                 (ScopedAgentMessagesTable.agentId eq agent.value) and
@@ -53,6 +52,7 @@ internal class UpdateMessageOperation(
             if (nextUsageOutputTokens != null) row[ScopedAgentMessagesTable.usageOutputTokens] = nextUsageOutputTokens
             if (nextUsageTotalTokens != null) row[ScopedAgentMessagesTable.usageTotalTokens] = nextUsageTotalTokens
             if (nextLatencyMs != null) row[ScopedAgentMessagesTable.latencyMs] = nextLatencyMs
+            if (nextMessageType != null) row[ScopedAgentMessagesTable.messageType] = nextMessageType.name.lowercase()
         }
         require(updated > 0) { "Message not found: ${message.value}" }
 

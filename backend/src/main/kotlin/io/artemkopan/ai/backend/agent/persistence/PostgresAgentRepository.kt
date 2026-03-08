@@ -100,6 +100,7 @@ class PostgresAgentRepository internal constructor(
         usageOutputTokens: Int?,
         usageTotalTokens: Int?,
         latencyMs: Long?,
+        messageType: AgentMessageType?,
     ): Result<AgentState> {
         return updateMessageOperation.value.execute(
             userId = lazyArg { userId },
@@ -113,6 +114,7 @@ class PostgresAgentRepository internal constructor(
             usageOutputTokens = lazyArg { usageOutputTokens },
             usageTotalTokens = lazyArg { usageTotalTokens },
             latencyMs = lazyArg { latencyMs },
+            messageType = lazyArg { messageType },
         )
     }
 

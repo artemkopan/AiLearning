@@ -372,55 +372,74 @@ private fun previousAgentId(order: List<AgentId>, activeAgentId: AgentId?): Agen
 }
 
 @Factory
-class PauseTaskActionUseCase(
+class AcceptPlanActionUseCase(
     private val controller: AgentSessionController,
 ) {
     operator fun invoke(agentId: AgentId) {
-        val state = controller.getState()
-        val task = state.taskByAgent[agentId] ?: return
-        if (task.currentPhase.equals(PHASE_PAUSED, ignoreCase = true) ||
-            task.currentPhase.equals(PHASE_DONE, ignoreCase = true)
-        ) return
-
-        controller.stopQueue(agentId)
-
+        val task = controller.getState().taskByAgent[agentId] ?: return
         controller.sendCommand {
-            TransitionTaskPhaseCommandDto(
+            AcceptPlanCommandDto(agentId = agentId.value, taskId = task.id)
+        }
+    }
+}
+
+@Factory
+class RejectPlanActionUseCase(
+    private val controller: AgentSessionController,
+) {
+    operator fun invoke(agentId: AgentId) {
+        val task = controller.getState().taskByAgent[agentId] ?: return
+        controller.sendCommand {
+            RejectPlanCommandDto(agentId = agentId.value, taskId = task.id)
+        }
+    }
+}
+
+@Factory
+class EditPlanActionUseCase(
+    private val controller: AgentSessionController,
+) {
+    operator fun invoke(agentId: AgentId, instructions: String = "") {
+        val task = controller.getState().taskByAgent[agentId] ?: return
+        controller.sendCommand {
+            EditPlanCommandDto(
                 agentId = agentId.value,
                 taskId = task.id,
-                fromPhase = task.currentPhase,
-                targetPhase = PHASE_PAUSED,
-                reason = "User paused task",
+                instructions = instructions,
             )
         }
     }
 }
 
 @Factory
-class ResumeTaskActionUseCase(
+class ConfirmExecutionActionUseCase(
     private val controller: AgentSessionController,
 ) {
-    operator fun invoke(agentId: AgentId) {
+    operator fun invoke(agentId: AgentId, text: String = "") {
         val task = controller.getState().taskByAgent[agentId] ?: return
-        if (!task.currentPhase.equals(PHASE_PAUSED, ignoreCase = true)) return
-
-        val resumePhase = task.steps.getOrNull(task.currentStepIndex)?.phase ?: PHASE_PLANNING
-
         controller.sendCommand {
-            TransitionTaskPhaseCommandDto(
-                agentId = agentId.value,
-                taskId = task.id,
-                fromPhase = PHASE_PAUSED,
-                targetPhase = resumePhase,
-                reason = "User resumed task",
-            )
+            ConfirmExecutionCommandDto(agentId = agentId.value, taskId = task.id, text = text)
         }
     }
 }
 
-private const val PHASE_PAUSED = "paused"
-private const val PHASE_DONE = "done"
-private const val PHASE_PLANNING = "planning"
+@Factory
+class RetryTaskActionUseCase(
+    private val controller: AgentSessionController,
+) {
+    operator fun invoke(agentId: AgentId) {
+        val task = controller.getState().taskByAgent[agentId] ?: return
+        controller.sendCommand {
+            TransitionTaskPhaseCommandDto(
+                agentId = agentId.value,
+                taskId = task.id,
+                fromPhase = "failed",
+                targetPhase = "planning",
+                reason = "User requested retry",
+            )
+        }
+    }
+}
 
 private const val STRATEGY_FULL_HISTORY = "full_history"
 private const val STRATEGY_SLIDING_WINDOW = "sliding_window"

@@ -1,13 +1,31 @@
 package io.artemkopan.ai.backend.agent.ws
 
 import io.artemkopan.ai.core.domain.model.AgentMessageRole
+import io.artemkopan.ai.core.domain.model.AgentMessageType
 import io.artemkopan.ai.core.domain.model.AgentState
 import io.artemkopan.ai.core.domain.model.AgentTask
 import io.artemkopan.ai.sharedcontract.*
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import org.koin.core.annotation.Single
 
+@Serializable
+private data class PlanJsonDto(
+    val plan: List<String> = emptyList(),
+    @SerialName("question_for_user")
+    val questionForUser: String = "",
+)
+
+@Serializable
+private data class ValidationJsonDto(
+    val checks: List<ValidationCheckDto> = emptyList(),
+)
+
 @Single
-class AgentWsMapper {
+class AgentWsMapper(
+    private val json: Json,
+) {
     fun toSnapshotMessage(state: AgentState): AgentStateSnapshotMessageDto {
         return AgentStateSnapshotMessageDto(
             state = AgentStateSnapshotDto(
@@ -45,6 +63,7 @@ class AgentWsMapper {
                                     )
                                 },
                                 latencyMs = message.latencyMs,
+                                messageType = message.messageType.toDto(),
                             )
                         },
                         branches = agent.branches.map { branch ->
@@ -65,6 +84,9 @@ class AgentWsMapper {
     }
 
     fun toTaskStateSnapshot(task: AgentTask): TaskStateSnapshotDto {
+        val (planSteps, questionForUser) = parsePlanJson(task.planJson)
+        val validationChecks = parseValidationJson(task.validationJson)
+
         return TaskStateSnapshotDto(
             agentId = task.agentId.value,
             task = TaskDto(
@@ -83,8 +105,33 @@ class AgentWsMapper {
                     )
                 },
                 currentStepIndex = task.currentStepIndex,
+                planSteps = planSteps,
+                questionForUser = questionForUser,
+                validationChecks = validationChecks,
             ),
         )
+    }
+
+    private fun parsePlanJson(planJson: String): Pair<List<String>, String> {
+        if (planJson.isBlank()) return emptyList<String>() to ""
+        return runCatching {
+            val dto = json.decodeFromString<PlanJsonDto>(planJson)
+            dto.plan to dto.questionForUser
+        }.getOrElse { _ -> emptyList<String>() to "" }
+    }
+
+    private fun parseValidationJson(validationJson: String): List<ValidationCheckDto> {
+        if (validationJson.isBlank()) return emptyList()
+        return runCatching {
+            val dto = json.decodeFromString<ValidationJsonDto>(validationJson)
+            dto.checks
+        }.getOrElse { _ -> emptyList<ValidationCheckDto>() }
+    }
+
+    private fun AgentMessageType.toDto(): AgentMessageTypeDto = when (this) {
+        AgentMessageType.TEXT -> AgentMessageTypeDto.TEXT
+        AgentMessageType.REVIEW -> AgentMessageTypeDto.REVIEW
+        AgentMessageType.EXECUTION_CONFIRMATION -> AgentMessageTypeDto.EXECUTION_CONFIRMATION
     }
 
     private fun parseAgentMode(value: String): AgentMode {
