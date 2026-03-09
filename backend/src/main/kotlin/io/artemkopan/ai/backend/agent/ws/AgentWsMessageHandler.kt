@@ -110,5 +110,6 @@ private fun AgentWsClientMessageDto.requestIdOrNull(): String? {
         is PauseTaskCommandDto -> requestId
         is ResumeTaskCommandDto -> requestId
         is StopTaskCommandDto -> requestId
+        is UpdateAgentInvariantsCommandDto -> requestId
     }
 }

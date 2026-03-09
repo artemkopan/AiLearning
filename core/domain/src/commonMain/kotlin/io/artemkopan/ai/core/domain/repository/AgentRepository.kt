@@ -53,4 +53,6 @@ interface AgentRepository {
     suspend fun switchBranch(userId: UserId, agentId: AgentId, branchId: String): Result<AgentState>
     suspend fun deleteBranch(userId: UserId, agentId: AgentId, branchId: String): Result<AgentState>
     suspend fun getBranches(userId: UserId, agentId: AgentId): Result<List<AgentBranch>>
+
+    suspend fun updateAgentInvariants(userId: UserId, agentId: AgentId, invariants: List<String>): Result<AgentState>
 }

@@ -101,7 +101,8 @@ class AcceptPlanResolver(
             model = agent.model.ifBlank { "deepseek-chat" },
             temperature = agent.temperature.toDoubleOrNull() ?: 0.7,
             maxOutputTokens = agent.maxOutputTokens.toIntOrNull(),
-            systemInstruction = EXECUTION_SYSTEM_PROMPT,
+            systemInstruction = EXECUTION_SYSTEM_PROMPT +
+                InvariantsPromptBuilder.buildInvariantsBlock(agent.invariants),
         )
         val execResult = generateTextUseCase.execute(execCommand).getOrElse { e ->
             failAgentMessageUseCase.execute(context.userScope, message.agentId, processingMsgId, e.message ?: "Execution failed")
@@ -142,7 +143,8 @@ class AcceptPlanResolver(
             prompt = "Original request context and execution result. Verify the response is accurate and not hallucinated.\n\nExecution result:\n$execText",
             model = agent.model.ifBlank { "deepseek-chat" },
             temperature = 0.3,
-            systemInstruction = VALIDATION_SYSTEM_PROMPT,
+            systemInstruction = VALIDATION_SYSTEM_PROMPT +
+                InvariantsPromptBuilder.buildInvariantsBlock(agent.invariants),
         )
         val validationResult = generateTextUseCase.execute(validationCommand).getOrElse { e ->
             transitionTaskPhaseUseCase.execute(context.userScope, message.agentId, message.taskId, TaskPhase.Done, "Validation skipped")

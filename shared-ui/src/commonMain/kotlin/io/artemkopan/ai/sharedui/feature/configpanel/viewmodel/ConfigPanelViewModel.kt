@@ -17,6 +17,7 @@ class ConfigPanelViewModel(
     private val updateMaxOutputTokensActionUseCase: UpdateMaxOutputTokensActionUseCase,
     private val updateTemperatureActionUseCase: UpdateTemperatureActionUseCase,
     private val updateStopSequencesActionUseCase: UpdateStopSequencesActionUseCase,
+    private val updateInvariantsActionUseCase: UpdateInvariantsActionUseCase,
 ) : ViewModel() {
 
     val state: StateFlow<ConfigPanelUiModel> = observeAgentSliceUseCase(agentId)
@@ -32,6 +33,7 @@ class ConfigPanelViewModel(
                 temperaturePlaceholder = config?.let {
                     "${it.temperatureMin} - ${it.temperatureMax}"
                 } ?: "0.0 - 2.0",
+                invariantsText = agent?.invariants?.joinToString("\n").orEmpty(),
             )
         }
         .stateIn(
@@ -54,6 +56,11 @@ class ConfigPanelViewModel(
 
     fun onStopSequencesChanged(value: String) {
         updateStopSequencesActionUseCase(agentId, value)
+    }
+
+    fun onApplyInvariants(text: String) {
+        val invariants = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        updateInvariantsActionUseCase(agentId, invariants)
     }
 }
 

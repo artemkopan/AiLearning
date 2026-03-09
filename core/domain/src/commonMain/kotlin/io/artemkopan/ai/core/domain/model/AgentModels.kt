@@ -117,6 +117,7 @@ data class Agent(
     val messages: List<AgentMessage> = emptyList(),
     val branches: List<AgentBranch> = emptyList(),
     val activeBranchId: String? = null,
+    val invariants: List<String> = emptyList(),
 )
 
 data class AgentState(
@@ -132,6 +133,7 @@ data class AgentDraft(
     val stopSequences: String,
     val agentMode: String,
     val contextConfig: AgentContextConfig,
+    val invariants: List<String> = emptyList(),
 )
 
 const val DEFAULT_RECENT_MESSAGES_N = 12

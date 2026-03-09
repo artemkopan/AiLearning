@@ -1,6 +1,7 @@
 package io.artemkopan.ai.backend.agent.persistence
 
 import io.artemkopan.ai.core.domain.model.*
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.ResultRow
 
 internal fun ResultRow.toAgent(messages: List<AgentMessage>): Agent = Agent(
@@ -22,6 +23,9 @@ internal fun ResultRow.toAgent(messages: List<AgentMessage>): Agent = Agent(
     messages = messages,
     branches = emptyList(),
     activeBranchId = this[ScopedAgentsTable.activeBranchId],
+    invariants = runCatching {
+        Json.decodeFromString<List<String>>(this[ScopedAgentsTable.invariants])
+    }.getOrDefault(emptyList()),
 )
 
 internal fun ResultRow.toMessage(): AgentMessage {

@@ -22,6 +22,8 @@ fun ConfigPanelFeature(
         onTemperatureChanged = viewModel::onTemperatureChanged,
         stopSequences = state.stopSequences,
         onStopSequencesChanged = viewModel::onStopSequencesChanged,
+        invariantsText = state.invariantsText,
+        onApplyInvariants = viewModel::onApplyInvariants,
         models = state.models,
         temperaturePlaceholder = state.temperaturePlaceholder,
         modifier = modifier,

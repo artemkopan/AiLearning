@@ -9,4 +9,5 @@ data class ConfigPanelUiModel(
     val stopSequences: String = "",
     val models: List<ModelOptionDto> = emptyList(),
     val temperaturePlaceholder: String = "0.0 - 2.0",
+    val invariantsText: String = "",
 )

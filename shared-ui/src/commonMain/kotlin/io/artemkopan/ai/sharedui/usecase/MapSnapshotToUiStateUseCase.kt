@@ -59,6 +59,7 @@ class MapSnapshotToUiStateUseCase(
                     )
                 },
                 draftMessage = preservedDraft,
+                invariants = dto.invariants,
             )
             if (config != null && dto.model != normalizedModel && normalizedModel.isNotBlank()) {
                 updates += mappedAgent

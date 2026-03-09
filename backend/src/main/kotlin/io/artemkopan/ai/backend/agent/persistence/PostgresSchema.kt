@@ -26,6 +26,7 @@ internal object ScopedAgentsTable : Table("scoped_agents") {
     val contextRecentMessagesN = integer("context_recent_messages_n").default(DEFAULT_RECENT_MESSAGES_N)
     val contextSummarizeEveryK = integer("context_summarize_every_k").default(DEFAULT_SUMMARIZE_EVERY_K)
     val activeBranchId = varchar("active_branch_id", 64).nullable().default(null)
+    val invariants = text("invariants").default("")
     val status = varchar("status", 255)
     val position = integer("position")
     val createdAt = long("created_at")

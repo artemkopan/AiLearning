@@ -96,6 +96,14 @@ data class ResumeTaskCommandDto(
 ) : AgentWsClientMessageDto
 
 @Serializable
+@SerialName("update_agent_invariants")
+data class UpdateAgentInvariantsCommandDto(
+    val agentId: String,
+    val invariants: List<String>,
+    val requestId: String? = null,
+) : AgentWsClientMessageDto
+
+@Serializable
 @SerialName("stop_task")
 data class StopTaskCommandDto(
     val agentId: String,

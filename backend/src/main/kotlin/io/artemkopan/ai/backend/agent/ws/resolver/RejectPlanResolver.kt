@@ -52,7 +52,8 @@ class RejectPlanResolver(
             model = agent.model.ifBlank { "deepseek-chat" },
             temperature = agent.temperature.toDoubleOrNull() ?: 0.7,
             maxOutputTokens = agent.maxOutputTokens.toIntOrNull(),
-            systemInstruction = REVISION_SYSTEM_PROMPT,
+            systemInstruction = REVISION_SYSTEM_PROMPT +
+                InvariantsPromptBuilder.buildInvariantsBlock(agent.invariants),
         )
 
         val result = generateTextUseCase.execute(command).getOrElse { e ->

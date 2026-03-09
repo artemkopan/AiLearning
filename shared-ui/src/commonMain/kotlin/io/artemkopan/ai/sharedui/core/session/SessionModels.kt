@@ -69,6 +69,7 @@ data class AgentState(
     val status: String = STATUS_DONE,
     val messages: List<AgentMessageState> = emptyList(),
     val draftMessage: String = "",
+    val invariants: List<String> = emptyList(),
 ) {
     val isLoading: Boolean
         get() = messages.any { it.status.equals(STATUS_PROCESSING, ignoreCase = true) }

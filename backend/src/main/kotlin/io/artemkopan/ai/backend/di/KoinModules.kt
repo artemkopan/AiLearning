@@ -64,7 +64,7 @@ val dataModule = module {
     }
 
     single { PostgresDbRuntime(get()) }
-    single<AgentRepository> { PostgresAgentRepository(get()) }
+    single<AgentRepository> { PostgresAgentRepository(get(), get()) }
     single<TaskRepository> { PostgresTaskRepository(get(), get()) }
 }
 

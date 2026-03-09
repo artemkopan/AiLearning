@@ -36,6 +36,7 @@ class AgentWsMapper(
                         temperature = agent.temperature,
                         stopSequences = agent.stopSequences,
                         status = agent.status.value,
+                        invariants = agent.invariants,
                         messages = agent.messages.map { message ->
                             AgentMessageDto(
                                 id = message.id.value,

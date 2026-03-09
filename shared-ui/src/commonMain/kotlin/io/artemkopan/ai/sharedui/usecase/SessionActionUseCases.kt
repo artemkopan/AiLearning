@@ -179,6 +179,21 @@ class UpdateStopSequencesActionUseCase(
     }
 }
 
+@Factory
+class UpdateInvariantsActionUseCase(
+    private val controller: AgentSessionController,
+) {
+    operator fun invoke(agentId: AgentId, invariants: List<String>) {
+        controller.updateAgent(agentId) { it.copy(invariants = invariants) }
+        controller.sendCommand {
+            UpdateAgentInvariantsCommandDto(
+                agentId = agentId.value,
+                invariants = invariants,
+            )
+        }
+    }
+}
+
 private fun nextAgentId(order: List<AgentId>, activeAgentId: AgentId?): AgentId? {
     if (order.isEmpty()) return null
     val currentIndex = order.indexOf(activeAgentId).takeIf { it >= 0 } ?: 0

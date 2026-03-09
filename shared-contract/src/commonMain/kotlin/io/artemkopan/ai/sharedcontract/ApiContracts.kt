@@ -109,4 +109,5 @@ data class AgentDto(
     val stopSequences: String = "",
     val status: String,
     val messages: List<AgentMessageDto> = emptyList(),
+    val invariants: List<String> = emptyList(),
 )

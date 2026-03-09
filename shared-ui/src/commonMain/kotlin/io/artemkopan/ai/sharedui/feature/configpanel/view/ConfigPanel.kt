@@ -25,6 +25,8 @@ fun ConfigPanel(
     onTemperatureChanged: (String) -> Unit,
     stopSequences: String,
     onStopSequencesChanged: (String) -> Unit,
+    invariantsText: String,
+    onApplyInvariants: (String) -> Unit,
     models: List<ModelOptionDto>,
     temperaturePlaceholder: String,
     modifier: Modifier = Modifier,
@@ -89,6 +91,33 @@ fun ConfigPanel(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
+
+        CyberpunkPanel(title = "[ INVARIANTS ]", accentColor = CyberpunkColors.Red) {
+            var draft by remember(invariantsText) { mutableStateOf(invariantsText) }
+            val hasChanges = draft != invariantsText
+
+            CyberpunkTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                label = "RULES (ONE PER LINE)",
+                placeholder = "e.g. Use only Kotlin coroutines, no RxJava",
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = false,
+                minLines = 3,
+            )
+
+            TextButton(
+                onClick = { onApplyInvariants(draft) },
+                enabled = hasChanges,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = if (hasChanges) "[ APPLY ]" else "[ APPLIED ]",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (hasChanges) CyberpunkColors.Red else CyberpunkColors.TextSecondary,
+                )
+            }
+        }
     }
 }
 

@@ -84,6 +84,7 @@ val sharedUiFeatureModule = module {
             updateMaxOutputTokensActionUseCase = get(),
             updateTemperatureActionUseCase = get(),
             updateStopSequencesActionUseCase = get(),
+            updateInvariantsActionUseCase = get(),
         )
     }
 }

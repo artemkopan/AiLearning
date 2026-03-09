@@ -2,12 +2,14 @@ package io.artemkopan.ai.backend.agent.persistence
 
 import io.artemkopan.ai.core.domain.model.*
 import io.artemkopan.ai.core.domain.repository.AgentRepository
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.koin.core.annotation.Single
 
 @Single(binds = [AgentRepository::class])
 internal class PostgresAgentRepository(
     private val runtime: PostgresDbRuntime,
+    private val json: Json,
 ) : AgentRepository {
 
     override suspend fun getState(userId: UserId) =
@@ -33,6 +35,7 @@ internal class PostgresAgentRepository(
                 it[ScopedAgentsTable.temperature] = ""
                 it[ScopedAgentsTable.stopSequences] = ""
                 it[ScopedAgentsTable.agentMode] = "default"
+                it[ScopedAgentsTable.invariants] = "[]"
                 it[ScopedAgentsTable.contextStrategy] = CONTEXT_STRATEGY_ROLLING
                 it[ScopedAgentsTable.status] = STATUS_DONE
                 it[ScopedAgentsTable.position] = position
@@ -179,6 +182,7 @@ internal class PostgresAgentRepository(
                 it[ScopedAgentsTable.temperature] = draft.temperature
                 it[ScopedAgentsTable.stopSequences] = draft.stopSequences
                 it[ScopedAgentsTable.agentMode] = draft.agentMode
+                it[ScopedAgentsTable.invariants] = json.encodeToString(draft.invariants)
                 it[ScopedAgentsTable.updatedAt] = runtime.nowMillis()
             }
             bumpVersionTx(userId)
@@ -237,6 +241,15 @@ internal class PostgresAgentRepository(
 
     override suspend fun getBranches(userId: UserId, agentId: AgentId): Result<List<AgentBranch>> =
         Result.success(emptyList())
+
+    override suspend fun updateAgentInvariants(userId: UserId, agentId: AgentId, invariants: List<String>) =
+        runtime.runDb {
+            ScopedAgentsTable.update({ (ScopedAgentsTable.userId eq userId.value) and (ScopedAgentsTable.id eq agentId.value) }) {
+                it[ScopedAgentsTable.invariants] = json.encodeToString(invariants)
+                it[ScopedAgentsTable.updatedAt] = runtime.nowMillis()
+            }
+            bumpVersionTx(userId)
+        }.mapCatching { runtime.readState(userId) }
 
     private fun loadMeta(userId: UserId): ResultRow =
         loadMetaTx(runtime, userId)
